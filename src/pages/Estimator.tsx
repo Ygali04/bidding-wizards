@@ -5,10 +5,15 @@ import {
   breakdown,
   emptyLabor,
   emptyMaterial,
+  emptySqFt,
+  isSqFtLine,
   laborTotal,
   materialTotal,
+  sqFtArea,
   type LaborLine,
   type MaterialLine,
+  type QtyMaterialLine,
+  type SqFtLine,
 } from "../lib/estimate";
 import { money, parseNumber, pct } from "../lib/money";
 import { SAMPLE_JOB, readJob } from "../lib/readJob";
@@ -106,7 +111,7 @@ export function Estimator() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={5}
-              placeholder="e.g. Guest bath, 48 sq ft subway tile, new vanity and toilet, paint the walls, occupied house…"
+              placeholder="e.g. 12x14 room, 800 sq ft flooring, guest bath 48 sq ft subway tile, new vanity…"
               className="mt-4 w-full resize-y rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
             />
             {status.kind !== "idle" && (
@@ -120,103 +125,50 @@ export function Estimator() {
           </section>
 
           <section className="print-break rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold">Materials</h2>
-              <button
-                type="button"
-                className="no-print text-xs font-semibold text-neutral-700 hover:text-black"
-                onClick={() => setMaterials((rows) => [...rows, emptyMaterial()])}
-              >
-                + Add item
-              </button>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-bold">Materials</h2>
+                <p className="text-[11px] text-neutral-400">Qty lines and square-footage lines share this bid.</p>
+              </div>
+              <div className="no-print flex gap-3">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-neutral-700 hover:text-black"
+                  onClick={() => setMaterials((rows) => [...rows, emptyMaterial()])}
+                >
+                  + Add item
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-neutral-700 hover:text-black"
+                  onClick={() => setMaterials((rows) => [...rows, emptySqFt()])}
+                >
+                  + Add sq ft
+                </button>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-neutral-400">
-                  <tr>
-                    <th className="pb-2 font-semibold">Item</th>
-                    <th className="pb-2 font-semibold">Qty</th>
-                    <th className="pb-2 font-semibold">Unit</th>
-                    <th className="pb-2 font-semibold">Unit cost</th>
-                    <th className="pb-2 text-right font-semibold">Line</th>
-                    <th className="no-print w-10 pb-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {materials.map((row, i) => (
-                    <tr key={row.id} className="border-t border-neutral-100">
-                      <td className="py-1.5 pr-2">
-                        <input
-                          value={row.item}
-                          onChange={(e) =>
-                            setMaterials((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, item: e.target.value } : r)),
-                            )
-                          }
-                          className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none"
-                          placeholder="Item"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={row.quantity}
-                          onChange={(e) =>
-                            setMaterials((rows) =>
-                              rows.map((r, idx) =>
-                                idx === i ? { ...r, quantity: parseNumber(e.target.value) } : r,
-                              ),
-                            )
-                          }
-                          className="w-20 rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          value={row.unit}
-                          onChange={(e) =>
-                            setMaterials((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, unit: e.target.value } : r)),
-                            )
-                          }
-                          className="w-20 rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={row.unitCost}
-                          onChange={(e) =>
-                            setMaterials((rows) =>
-                              rows.map((r, idx) =>
-                                idx === i ? { ...r, unitCost: parseNumber(e.target.value) } : r,
-                              ),
-                            )
-                          }
-                          className="w-24 rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-1.5 text-right font-medium tabular-nums">{money(materialTotal(row))}</td>
-                      <td className="no-print py-1.5 pl-2 text-right">
-                        <button
-                          type="button"
-                          className="text-neutral-400 hover:text-red-600"
-                          onClick={() =>
-                            setMaterials((rows) => (rows.length === 1 ? [emptyMaterial()] : rows.filter((_, idx) => idx !== i)))
-                          }
-                          aria-label="Remove material"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-2 overflow-x-auto">
+              {materials.map((row, i) =>
+                isSqFtLine(row) ? (
+                  <SqFtRow
+                    key={row.id}
+                    row={row}
+                    onChange={(next) => setMaterials((rows) => rows.map((r, idx) => (idx === i ? next : r)))}
+                    onRemove={() =>
+                      setMaterials((rows) => (rows.length === 1 ? [emptyMaterial()] : rows.filter((_, idx) => idx !== i)))
+                    }
+                  />
+                ) : (
+                  <QtyRow
+                    key={row.id}
+                    row={row}
+                    onChange={(next) => setMaterials((rows) => rows.map((r, idx) => (idx === i ? next : r)))}
+                    onRemove={() =>
+                      setMaterials((rows) => (rows.length === 1 ? [emptyMaterial()] : rows.filter((_, idx) => idx !== i)))
+                    }
+                  />
+                ),
+              )}
             </div>
           </section>
 
@@ -353,6 +305,148 @@ export function Estimator() {
       <footer className="border-t border-neutral-200/70 px-4 py-5 text-center text-xs text-neutral-400 sm:px-8">
         Bidding Wizards · Wizbid · totals computed in the browser
       </footer>
+    </div>
+  );
+}
+
+const fieldClass =
+  "w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none";
+
+function QtyRow({
+  row,
+  onChange,
+  onRemove,
+}: {
+  row: QtyMaterialLine;
+  onChange: (next: QtyMaterialLine) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(4.5rem,0.5fr))_minmax(5rem,0.6fr)_auto] items-center gap-1 rounded-xl border border-neutral-100 px-2 py-1 text-sm">
+      <input
+        value={row.item}
+        onChange={(e) => onChange({ ...row, item: e.target.value })}
+        className={fieldClass}
+        placeholder="Item"
+        aria-label="Material item"
+      />
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Qty</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={row.quantity}
+          onChange={(e) => onChange({ ...row, quantity: parseNumber(e.target.value) })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Unit</span>
+        <input
+          value={row.unit}
+          onChange={(e) => onChange({ ...row, unit: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Unit cost</span>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={row.unitCost}
+          onChange={(e) => onChange({ ...row, unitCost: parseNumber(e.target.value) })}
+          className={fieldClass}
+        />
+      </label>
+      <div className="text-right">
+        <div className="text-[10px] uppercase tracking-wide text-neutral-400">Line</div>
+        <div className="font-medium tabular-nums">{money(materialTotal(row))}</div>
+      </div>
+      <button
+        type="button"
+        className="no-print px-1 text-neutral-400 hover:text-red-600"
+        onClick={onRemove}
+        aria-label="Remove material"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function SqFtRow({
+  row,
+  onChange,
+  onRemove,
+}: {
+  row: SqFtLine;
+  onChange: (next: SqFtLine) => void;
+  onRemove: () => void;
+}) {
+  const area = sqFtArea(row);
+  return (
+    <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(4.5rem,0.45fr))_minmax(5rem,0.5fr)_minmax(5rem,0.55fr)_auto] items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/40 px-2 py-1 text-sm">
+      <label className="flex min-w-0 flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-amber-800/70">Sq ft item</span>
+        <input
+          value={row.item}
+          onChange={(e) => onChange({ ...row, item: e.target.value })}
+          className={fieldClass}
+          placeholder="Room / flooring"
+          aria-label="Square-footage item"
+        />
+      </label>
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Length</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={row.length}
+          onChange={(e) => onChange({ ...row, length: parseNumber(e.target.value) })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Width</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={row.width}
+          onChange={(e) => onChange({ ...row, width: parseNumber(e.target.value) })}
+          className={fieldClass}
+        />
+      </label>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Area</span>
+        <span className="px-2 py-1.5 tabular-nums text-neutral-800">{area.toLocaleString()} sf</span>
+      </div>
+      <label className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">$/sf</span>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={row.pricePerSqFt}
+          onChange={(e) => onChange({ ...row, pricePerSqFt: parseNumber(e.target.value) })}
+          className={fieldClass}
+        />
+      </label>
+      <div className="text-right">
+        <div className="text-[10px] uppercase tracking-wide text-neutral-400">Dollars</div>
+        <div className="font-medium tabular-nums">{money(materialTotal(row))}</div>
+      </div>
+      <button
+        type="button"
+        className="no-print px-1 text-neutral-400 hover:text-red-600"
+        onClick={onRemove}
+        aria-label="Remove square-footage line"
+      >
+        ×
+      </button>
     </div>
   );
 }

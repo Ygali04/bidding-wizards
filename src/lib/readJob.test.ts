@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SAMPLE_JOB, readJob } from "./readJob";
+import { isSqFtLine } from "./estimate";
+import { SAMPLE_JOB, parseSqFtPhrases, readJob } from "./readJob";
 
 describe("readJob", () => {
   it("reads a guest-bath brief into catalog materials and implied labor", () => {
@@ -15,11 +16,15 @@ describe("readJob", () => {
     expect(items).toContain("Interior paint");
 
     const tile = result.materials.find((m) => m.item === "Subway tile");
-    expect(tile?.quantity).toBe(48);
-    expect(tile?.unit).toBe("sq ft");
+    expect(tile && isSqFtLine(tile)).toBe(true);
+    if (tile && isSqFtLine(tile)) {
+      expect(tile.length).toBe(48);
+      expect(tile.width).toBe(1);
+      expect(tile.pricePerSqFt).toBe(4.25);
+    }
 
     const paint = result.materials.find((m) => m.item === "Interior paint");
-    expect(paint?.quantity).toBe(2);
+    expect(paint && !isSqFtLine(paint) && paint.quantity).toBe(2);
 
     const roles = result.labor.map((l) => l.role);
     expect(roles).toContain("Tile setter");
@@ -52,7 +57,44 @@ describe("readJob", () => {
     if (!result.ok) return;
     expect(result.materials.some((m) => m.item === "Asphalt shingles")).toBe(true);
     const shingles = result.materials.find((m) => m.item === "Asphalt shingles");
-    expect(shingles?.quantity).toBe(22);
+    expect(shingles && !isSqFtLine(shingles) && shingles.quantity).toBe(22);
     expect(result.labor.some((l) => l.role === "Roofer")).toBe(true);
+  });
+});
+
+describe("parseSqFtPhrases", () => {
+  it("reads 12x14 room as length × width", () => {
+    const parsed = parseSqFtPhrases("12x14 room");
+    expect(parsed).toMatchObject([{ item: "Room", length: 12, width: 14 }]);
+  });
+
+  it("reads 12 by 14", () => {
+    const parsed = parseSqFtPhrases("Install flooring in a 12 by 14 living room");
+    expect(parsed.some((p) => p.length === 12 && p.width === 14)).toBe(true);
+  });
+
+  it("reads 800 sq ft flooring as area with width 1", () => {
+    const parsed = parseSqFtPhrases("800 sq ft flooring");
+    expect(parsed[0]).toMatchObject({ length: 800, width: 1 });
+    expect(parsed[0]?.item.toLowerCase()).toContain("floor");
+  });
+
+  it("skips 2x4 lumber sizes", () => {
+    expect(parseSqFtPhrases("Need 2x4 studs and 4x8 plywood sheets")).toEqual([]);
+  });
+});
+
+describe("readJob sq-ft lines", () => {
+  it("puts parsed rooms and coverings on the bid as sq-ft lines", () => {
+    const result = readJob("12x14 room and 800 sq ft flooring, plus a new toilet.");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const sq = result.materials.filter(isSqFtLine);
+    expect(sq.some((l) => l.length === 12 && l.width === 14)).toBe(true);
+    const floor = sq.find((l) => l.length === 800 && l.width === 1);
+    expect(floor).toBeTruthy();
+    expect(floor?.pricePerSqFt).toBeGreaterThan(0);
+    const toilet = result.materials.find((m) => !isSqFtLine(m) && m.item === "Toilet");
+    expect(toilet && !isSqFtLine(toilet) && toilet.quantity).toBe(1);
   });
 });

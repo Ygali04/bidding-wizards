@@ -247,6 +247,8 @@ export type ParsedSqFtPhrase = {
   item: string;
   length: number;
   width: number;
+  start: number;
+  end: number;
 };
 
 function titleCase(s: string): string {
@@ -287,7 +289,7 @@ function overlaps(used: Array<[number, number]>, start: number, end: number): bo
  * Area-only phrases become length = N, width = 1 so dollars still equal N × $/sf.
  */
 export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
-  const text = raw.toLowerCase();
+  const text = normalize(raw);
   const used: Array<[number, number]> = [];
   const results: ParsedSqFtPhrase[] = [];
 
@@ -311,10 +313,15 @@ export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
       item: titleCase(label) || "Room",
       length,
       width,
+      start,
+      end,
     });
   }
 
-  const areaAfter = new RegExp(String.raw`\b(\d+(?:\.\d+)?)\s*${AREA_UNIT}(?:\s+(?:of\s+)?([a-z][a-z0-9+\-\s]{1,40}))?`, "gi");
+  const areaAfter = new RegExp(
+    String.raw`\b(\d+(?:\.\d+)?)\s*${AREA_UNIT}(?:\s+of)?(?:\s+([a-z]+(?:[ \-][a-z]+){0,2}))?`,
+    "gi",
+  );
   while ((m = areaAfter.exec(text))) {
     const start = m.index;
     const end = start + m[0].length;
@@ -327,6 +334,8 @@ export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
       item: titleCase(label) || "Sq ft work",
       length: area,
       width: 1,
+      start,
+      end,
     });
   }
 
@@ -349,10 +358,21 @@ export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
       item: titleCase(label) || "Sq ft work",
       length: area,
       width: 1,
+      start,
+      end,
     });
   }
 
   return results;
+}
+
+function maskSpans(text: string, spans: Array<{ start: number; end: number }>): string {
+  if (spans.length === 0) return text;
+  const chars = [...text];
+  for (const { start, end } of spans) {
+    for (let i = start; i < end && i < chars.length; i++) chars[i] = " ";
+  }
+  return chars.join("").replace(/\s+/g, " ").trim();
 }
 
 function catalogForSqFtItem(item: string): CatalogEntry | undefined {
@@ -394,18 +414,6 @@ function catalogForSqFtItem(item: string): CatalogEntry | undefined {
   return best;
 }
 
-function sqFtLinesFromText(raw: string): SqFtLine[] {
-  return parseSqFtPhrases(raw).map((parsed) => {
-    const line = emptySqFt();
-    const cat = catalogForSqFtItem(parsed.item);
-    line.item = cat?.name ?? parsed.item;
-    line.length = parsed.length;
-    line.width = parsed.width;
-    line.pricePerSqFt = cat?.defaultCost ?? 0;
-    return line;
-  });
-}
-
 function sqFtCoversCatalog(entry: CatalogEntry, sqft: SqFtLine[]): boolean {
   if (sqft.length === 0) return false;
   const blob = sqft.map((s) => s.item.toLowerCase()).join(" | ");
@@ -428,9 +436,11 @@ export function readJob(raw: string): ReadJobResult {
     return { ok: false, reason: "empty", message: "Paste a job brief first." };
   }
 
-  const haystack = normalize(text);
+  const haystackFull = normalize(text);
+  const sqftParsed = parseSqFtPhrases(haystackFull);
+  const haystack = maskSpans(haystackFull, sqftParsed);
 
-  if (isOutOfScope(haystack)) {
+  if (isOutOfScope(haystackFull)) {
     return {
       ok: false,
       reason: "out_of_scope",
@@ -439,7 +449,15 @@ export function readJob(raw: string): ReadJobResult {
     };
   }
 
-  const sqftLines = sqFtLinesFromText(text);
+  const sqftLines = sqftParsed.map((parsed) => {
+    const line = emptySqFt();
+    const cat = catalogForSqFtItem(parsed.item);
+    line.item = cat?.name ?? parsed.item;
+    line.length = parsed.length;
+    line.width = parsed.width;
+    line.pricePerSqFt = cat?.defaultCost ?? 0;
+    return line;
+  });
   const materials: MaterialLine[] = [...sqftLines];
   const labor: LaborLine[] = [];
   const matched: string[] = sqftLines.map((l) => l.item);
