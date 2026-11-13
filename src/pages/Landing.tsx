@@ -1,3 +1,4 @@
+import { HowItWorks } from "../components/landing/HowItWorks";
 import { MinimalFooter } from "../components/landing/MinimalFooter";
 import { PlayfulHero } from "../components/landing/PlayfulHero";
 import { Toast } from "../components/landing/Toast";
@@ -5,17 +6,17 @@ import { useFitToViewport } from "../components/landing/useFitToViewport";
 import { useState } from "react";
 
 const COPY = {
-  headlineLine1: "The bid ",
-  headlineMarker: "you send",
-  headlineLine2: " is now on",
-  headlineScribble: "the money.",
+  headlineLine1: "Know your ",
+  headlineMarker: "margin",
+  headlineLine2: " before the bid",
+  headlineScribble: "leaves your hands.",
   subtitleBefore: "Paste the job, or drop a PDF blueprint. Bidding Wizards itemizes",
   subtitleHighlight: "materials, labor, contingency and markup",
-  subtitleAfter: "so you see the margin you'll keep before it goes out the door. TypeSafe Jev classifies PDFs and job forms when the API key is set; Pages still uses the canned take-off.",
+  subtitleAfter: "so the profit you'll keep is on the page before you send it.",
   ctaLabel: "Open the estimator",
   ghostLabel: "Try a blueprint take-off",
   rating: "Built for trades",
-  ratingNote: "Qty × cost and hours × rate live in code. Jev only classifies the document.",
+  ratingNote: "AI reads the brief. Every dollar figure is plain code you can check by hand.",
   statusTime: "9:41",
   phone: {
     userMessage:
@@ -64,12 +65,24 @@ export function Landing() {
           </span>
           <span className="text-sm font-bold tracking-tight text-neutral-900">Bidding Wizards</span>
         </a>
-        <a
-          href="#/bid"
-          className="rounded-lg bg-[#FACC15] px-3.5 py-2 text-xs font-bold text-neutral-950 shadow-sm hover:bg-[#EAB308]"
-        >
-          Estimator
-        </a>
+        <nav className="flex items-center gap-4">
+          <a
+            href="#how-it-works"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="hidden text-xs font-semibold text-neutral-500 hover:text-neutral-900 sm:inline"
+          >
+            How it works
+          </a>
+          <a
+            href="#/bid"
+            className="rounded-lg bg-[#FACC15] px-3.5 py-2 text-xs font-bold text-neutral-950 shadow-sm hover:bg-[#EAB308]"
+          >
+            Estimator
+          </a>
+        </nav>
       </header>
 
       <main
@@ -93,12 +106,14 @@ export function Landing() {
         />
       </main>
 
+      <HowItWorks />
+
       <MinimalFooter
         ref={fit.footerRef}
         copyright="Bidding Wizards"
         links={[
           { label: "Estimator", href: "#/bid" },
-          { label: "Blueprint mock", href: "#/bid" },
+          { label: "Classic BidBench", href: "./bidbench.html" },
           { label: "GitHub", href: "https://github.com/espetro/bidding-wizards" },
         ]}
       />
