@@ -148,3 +148,18 @@ export function emptySqFt(): SqFtLine {
 export function emptyLabor(): LaborLine {
   return { id: newId(), role: "", hours: 1, rate: 0 };
 }
+
+/** Markup % needed so margin (markup ÷ bid) equals target %. m = t / (1 - t). */
+export function markupForMargin(targetMarginPct: number): number {
+  const t = clampPct(targetMarginPct) / 100;
+  if (t >= 1) return Infinity;
+  return roundCents((t / (1 - t)) * 100);
+}
+
+/** Margin kept if labor and materials overrun by the given %, bid price unchanged. */
+export function marginAfterOverrun(input: EstimateInput, overrunPct: number): number {
+  const b = breakdown(input);
+  if (b.bidTotal <= 0) return 0;
+  const realCost = b.direct * (1 + clampPct(overrunPct) / 100);
+  return roundCents(((b.bidTotal - realCost) / b.bidTotal) * 100);
+}
