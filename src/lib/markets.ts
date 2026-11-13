@@ -68,7 +68,7 @@ export const MARKETS: Record<MarketId, Market> = {
     id: "nz",
     label: "New Zealand",
     chip: "NZ · GST 15%",
-    locale: "en-NZ",
+    locale: "en-US",
     currency: "NZD",
     taxName: "GST",
     taxPct: 15,
