@@ -23,6 +23,7 @@ import { applyFormHints } from "../lib/documentDecision";
 import { money, parseNumber, pct } from "../lib/money";
 import { processDocumentsClient } from "../lib/processDocumentClient";
 import { SAMPLE_JOB, readJob } from "../lib/readJob";
+import { download, toProcoreBudgetCsv, toQuickBooksIif } from "../lib/exports";
 
 type Status = { kind: "idle" } | { kind: "ok"; text: string } | { kind: "err"; text: string };
 
@@ -106,6 +107,20 @@ export function Estimator() {
             className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
           >
             Sample job
+          </button>
+          <button
+            type="button"
+            onClick={() => download("procore-budget.csv", toProcoreBudgetCsv({ materials, labor, markupPct, contingencyPct, gstPct }), "text/csv")}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            Procore budget
+          </button>
+          <button
+            type="button"
+            onClick={() => download("quickbooks-estimate.iif", toQuickBooksIif({ materials, labor, markupPct, contingencyPct, gstPct }, window.prompt("QuickBooks customer:job name", "Customer:Job") ?? ""))}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            QuickBooks
           </button>
           <button
             type="button"
