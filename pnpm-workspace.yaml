@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+
+overrides:
+  "@ai-sdk/gateway": "4.0.143"
+  "@ai-sdk/provider": "4.0.37"
+  "@ai-sdk/provider-utils": "5.0.79"
