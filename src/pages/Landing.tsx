@@ -113,6 +113,7 @@ export function Landing() {
         copyright="Bidding Wizards"
         links={[
           { label: "Estimator", href: "#/bid" },
+          { label: "Pitch deck", href: "./pitch.html" },
           { label: "Classic BidBench", href: "./bidbench.html" },
           { label: "GitHub", href: "https://github.com/espetro/bidding-wizards" },
         ]}
