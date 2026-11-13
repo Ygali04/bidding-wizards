@@ -42,6 +42,8 @@ export function Estimator() {
   const [contingencyPct, setContingencyPct] = useState(saved?.contingencyPct ?? DEFAULT_CONTINGENCY);
   const [targetMargin, setTargetMargin] = useState(saved?.targetMargin ?? 15);
   const [gstPct, setGstPct] = useState(saved?.gstPct ?? 10);
+  // Area lines are L × W × price either way; this only sets the units shown (AU/NZ estimators work in metres).
+  const [metric, setMetric] = useState(true);
   const [overrunPct, setOverrunPct] = useState(saved?.overrunPct ?? 10);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [reading, setReading] = useState(false);
@@ -208,7 +210,7 @@ export function Estimator() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={5}
-              placeholder="e.g. 12x14 room, 800 sq ft flooring, guest bath 48 sq ft subway tile, new vanity…"
+              placeholder="e.g. roof 12 x 8 m, 45 per m², new gutters, guest bath tile, new vanity…"
               className="mt-4 w-full resize-y rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
             />
             {status.kind !== "idle" && (
@@ -232,6 +234,14 @@ export function Estimator() {
               <div className="no-print flex gap-3">
                 <button
                   type="button"
+                  className="rounded-md border border-neutral-200 px-2 text-xs font-semibold text-neutral-700 hover:text-black"
+                  onClick={() => setMetric((m) => !m)}
+                  aria-label="Switch area units"
+                >
+                  {metric ? "Units: m / m²" : "Units: ft / sq ft"}
+                </button>
+                <button
+                  type="button"
                   className="text-xs font-semibold text-neutral-700 hover:text-black"
                   onClick={() => setMaterials((rows) => [...rows, emptyMaterial()])}
                 >
@@ -242,7 +252,7 @@ export function Estimator() {
                   className="text-xs font-semibold text-neutral-700 hover:text-black"
                   onClick={() => setMaterials((rows) => [...rows, emptySqFt()])}
                 >
-                  + Add sq ft
+                  {metric ? "+ Add m² line" : "+ Add sq ft"}
                 </button>
               </div>
             </div>
@@ -250,6 +260,7 @@ export function Estimator() {
               {materials.map((row, i) =>
                 isSqFtLine(row) ? (
                   <SqFtRow
+                    metric={metric}
                     key={row.id}
                     row={row}
                     onChange={(next) => setMaterials((rows) => rows.map((r, idx) => (idx === i ? next : r)))}
@@ -505,10 +516,12 @@ function QtyRow({
 }
 
 function SqFtRow({
+  metric,
   row,
   onChange,
   onRemove,
 }: {
+  metric: boolean;
   row: SqFtLine;
   onChange: (next: SqFtLine) => void;
   onRemove: () => void;
@@ -517,7 +530,7 @@ function SqFtRow({
   return (
     <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(4.5rem,0.45fr))_minmax(5rem,0.5fr)_minmax(5rem,0.55fr)_auto] items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/40 px-2 py-1 text-sm">
       <label className="flex min-w-0 flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-amber-800/70">Sq ft item</span>
+        <span className="text-[10px] uppercase tracking-wide text-amber-800/70">{metric ? "Area item (m²)" : "Sq ft item"}</span>
         <input
           value={row.item}
           onChange={(e) => onChange({ ...row, item: e.target.value })}
@@ -527,7 +540,7 @@ function SqFtRow({
         />
       </label>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Length</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "Length (m)" : "Length (ft)"}</span>
         <input
           type="number"
           min={0}
@@ -538,7 +551,7 @@ function SqFtRow({
         />
       </label>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Width</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "Width (m)" : "Width (ft)"}</span>
         <input
           type="number"
           min={0}
@@ -550,10 +563,10 @@ function SqFtRow({
       </label>
       <div className="flex flex-col">
         <span className="text-[10px] uppercase tracking-wide text-neutral-400">Area</span>
-        <span className="px-2 py-1.5 tabular-nums text-neutral-800">{area.toLocaleString()} sf</span>
+        <span className="px-2 py-1.5 tabular-nums text-neutral-800">{area.toLocaleString(undefined, { maximumFractionDigits: 2 })} {metric ? "m²" : "sf"}</span>
       </div>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">$/sf</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "$/m²" : "$/sf"}</span>
         <input
           type="number"
           min={0}
