@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var path = location.pathname.replace(/\/+$/, "") || "/";
+        var q = location.search;
+        var h = location.hash;
+        if (/\/bid$/.test(path) && h.indexOf("#/") !== 0) {
+          location.replace(path.replace(/\/bid$/, "/") + "#/bid" + q);
+          return;
+        }
+        var root = path.replace(/\/[^/]+$/, "/");
+        if (root.charAt(root.length - 1) !== "/") root += "/";
+        location.replace(root + q + h);
+      })();
+    </script>
+    <title>Bidding Wizards</title>
+  </head>
+  <body>
+    <a href="./">Back to Bidding Wizards</a>
+  </body>
+</html>
