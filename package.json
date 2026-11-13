@@ -4,21 +4,17 @@
   "version": "1.0.0",
   "type": "module",
   "packageManager": "pnpm@12.16.1",
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"]
-  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && pnpm run deck",
+    "build": "pnpm run typecheck && vite build && pnpm run deck",
     "deck": "marp pitch/slides.md -o dist/pitch.html --html --no-stdin",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.node.json --pretty false"
   },
   "dependencies": {
     "@ai-sdk/typesafe-ai": "3.0.38",
     "@fontsource-variable/inter": "^5.2.8",
-    "@xenova/transformers": "^2.17.2",
     "ai": "7.0.170",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

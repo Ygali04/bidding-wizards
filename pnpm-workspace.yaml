@@ -1,6 +1,9 @@
+packages: []
+
 allowBuilds:
   esbuild: true
   sharp: true
+  protobufjs: false
 
 overrides:
   "@ai-sdk/gateway": "4.0.143"
