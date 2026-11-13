@@ -3,7 +3,7 @@ import { breakdown, isSqFtLine, laborTotal, materialTotal, sqFtArea, type Estima
 import { money, pct } from "./money";
 
 /** Plain-text bid for pasting into an email or text message. Same math as the sheet. */
-export function bidText(job: JobInfo, input: EstimateInput): string {
+export function bidText(job: JobInfo, input: EstimateInput, metric = false): string {
   const b = breakdown(input);
   const lines: string[] = [`BID: ${job.name || "Untitled job"}`];
   if (job.address) lines.push(`Address: ${job.address}`);
@@ -13,7 +13,7 @@ export function bidText(job: JobInfo, input: EstimateInput): string {
   for (const m of input.materials) {
     if (!m.item && materialTotal(m) === 0) continue;
     const detail = isSqFtLine(m)
-      ? `${m.length} x ${m.width} = ${sqFtArea(m)} sq ft @ ${money(m.pricePerSqFt)}`
+      ? `${m.length} x ${m.width} = ${sqFtArea(m)} ${metric ? "m²" : "sq ft"} @ ${money(m.pricePerSqFt)}${metric ? "/m²" : ""}`
       : `${m.quantity} ${m.unit} @ ${money(m.unitCost)}`;
     lines.push(`- ${m.item || "Material"}: ${detail} = ${money(materialTotal(m))}`);
   }
