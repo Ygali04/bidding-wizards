@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakdown, isSqFtLine } from "./estimate";
+import { breakdown, isAreaPricedLine, isSqFtLine } from "./estimate";
 import {
   SAMPLE_ELECTRICAL_BLUEPRINT,
   isPdfBlueprint,
@@ -39,8 +39,8 @@ describe("mockBlueprintTakeoff", () => {
     expect(result.mock).toBe(true);
     expect(result.title).toMatch(/electrical/i);
     expect(result.matched).toContain("18 duplex receptacles");
-    const duplex = result.materials.find((m) => !isSqFtLine(m) && m.item.includes("Duplex"));
-    expect(duplex && !isSqFtLine(duplex) && duplex.quantity).toBe(18);
+    const duplex = result.materials.find((m) => !isAreaPricedLine(m) && m.item.includes("Duplex"));
+    expect(duplex && !isAreaPricedLine(duplex) && duplex.quantity).toBe(18);
     const coverage = result.materials.find(isSqFtLine);
     expect(coverage?.length).toBe(22);
     expect(coverage?.width).toBe(18);

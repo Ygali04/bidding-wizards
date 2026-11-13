@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { isSqFtLine } from "./estimate";
-import { SAMPLE_JOB, parseSqFtPhrases, readJob } from "./readJob";
+import { isAreaLine, isAreaPricedLine, isSqFtLine } from "./estimate";
+import { SAMPLE_NZ_REROOF } from "./markets";
+import { SAMPLE_JOB, parseAreaPhrases, parseSqFtPhrases, readJob } from "./readJob";
 
 describe("readJob", () => {
   it("reads a guest-bath brief into catalog materials and implied labor", () => {
@@ -24,7 +25,7 @@ describe("readJob", () => {
     }
 
     const paint = result.materials.find((m) => m.item === "Interior paint");
-    expect(paint && !isSqFtLine(paint) && paint.quantity).toBe(2);
+    expect(paint && !isAreaPricedLine(paint) && paint.quantity).toBe(2);
 
     const roles = result.labor.map((l) => l.role);
     expect(roles).toContain("Tile setter");
@@ -57,7 +58,7 @@ describe("readJob", () => {
     if (!result.ok) return;
     expect(result.materials.some((m) => m.item === "Asphalt shingles")).toBe(true);
     const shingles = result.materials.find((m) => m.item === "Asphalt shingles");
-    expect(shingles && !isSqFtLine(shingles) && shingles.quantity).toBe(22);
+    expect(shingles && !isAreaPricedLine(shingles) && shingles.quantity).toBe(22);
     expect(result.labor.some((l) => l.role === "Roofer")).toBe(true);
   });
 });
@@ -84,6 +85,28 @@ describe("parseSqFtPhrases", () => {
   });
 });
 
+describe("readJob metre area lines", () => {
+  it("reads Mereana's NZ re-roof as L×W×NZ$/m² with GST 15%", () => {
+    const result = readJob(SAMPLE_NZ_REROOF);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const area = result.materials.find(isAreaLine);
+    expect(area).toMatchObject({ length: 18, width: 12, unit: "m", pricePerArea: 85 });
+    expect(result.marketId).toBe("nz");
+    expect(result.gstPct).toBe(15);
+    expect(result.markupPct).toBe(0);
+    expect(result.contingencyPct).toBe(0);
+    expect(result.labor).toEqual([]);
+  });
+});
+
+describe("parseAreaPhrases", () => {
+  it("reads 18 m x 12 m and NZ$85 per m²", () => {
+    const parsed = parseAreaPhrases("Re-roof, 18 m x 12 m, NZ$85 per m²");
+    expect(parsed.some((p) => p.length === 18 && p.width === 12 && p.unit === "m" && p.pricePerArea === 85)).toBe(true);
+  });
+});
+
 describe("readJob sq-ft lines", () => {
   it("puts parsed rooms and coverings on the bid as sq-ft lines", () => {
     const result = readJob("12x14 room and 800 sq ft flooring, plus a new toilet.");
@@ -94,8 +117,8 @@ describe("readJob sq-ft lines", () => {
     const floor = sq.find((l) => l.length === 800 && l.width === 1);
     expect(floor).toBeTruthy();
     expect(floor?.pricePerSqFt).toBeGreaterThan(0);
-    const toilet = result.materials.find((m) => !isSqFtLine(m) && m.item === "Toilet");
-    expect(toilet && !isSqFtLine(toilet) && toilet.quantity).toBe(1);
+    const toilet = result.materials.find((m) => !isAreaPricedLine(m) && m.item === "Toilet");
+    expect(toilet && !isAreaPricedLine(toilet) && toilet.quantity).toBe(1);
   });
 });
 
@@ -104,7 +127,7 @@ describe("metric briefs", () => {
     const r = readJob("Roof 12 x 8 m colorbond reroof, plus 30 m² of floor tile in the bathroom");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const areas = r.materials.filter(isSqFtLine).map((l) => l.length * l.width).sort((a, b) => a - b);
+    const areas = r.materials.filter(isAreaPricedLine).map((l) => l.length * l.width).sort((a, b) => a - b);
     expect(areas).toEqual([30, 96]);
   });
 });

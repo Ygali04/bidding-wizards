@@ -177,7 +177,15 @@ export const CATALOG: CatalogEntry[] = [
     name: "Asphalt shingles",
     unit: "sq",
     defaultCost: 125,
-    phrases: ["shingles", "roofing", "architectural shingle"],
+    phrases: ["shingles", "architectural shingle"],
+  },
+  {
+    id: "metal-roof",
+    kind: "material",
+    name: "Metal roofing",
+    unit: "m²",
+    defaultCost: 85,
+    phrases: ["re-roof", "reroof", "metal roof", "longrun", "colorsteel", "coloursteel", "iron roof"],
   },
   {
     id: "underlayment",

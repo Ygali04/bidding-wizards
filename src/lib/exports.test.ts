@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyLabor, emptyMaterial } from "./estimate";
+import { emptyArea, emptyLabor, emptyMaterial } from "./estimate";
 import { toProcoreBudgetCsv, toQuickBooksIif } from "./exports";
 
 const input = {
@@ -15,6 +15,18 @@ describe("exports", () => {
     expect(sum).toBe(1100); // 500 + 500 direct + 100 contingency
     expect(rows.map((r) => r.split(",")[1])).toEqual(["M", "L", "O"]);
   });
+  it("Procore UOM is M2 for metre area lines", () => {
+    const csv = toProcoreBudgetCsv({
+      materials: [{ ...emptyArea("m"), item: "Re-roof", length: 18, width: 12, pricePerArea: 85 }],
+      labor: [],
+      contingencyPct: 0,
+      markupPct: 0,
+      gstPct: 15,
+    });
+    expect(csv).toContain("M2");
+    expect(csv).toContain("18360.00");
+  });
+
   it("QuickBooks IIF lines sum to the GST-inclusive total", () => {
     const iif = toQuickBooksIif(input, "Gus Pty Ltd", new Date(2026, 10, 13));
     const trns = iif.split("\r\n").find((l) => l.startsWith("TRNS\t"))!;

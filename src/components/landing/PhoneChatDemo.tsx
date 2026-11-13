@@ -22,6 +22,7 @@ export type PhoneChatCopy = {
   replyDefault: string;
   replyKitchen: string;
   replyRoof: string;
+  replyNzRoof?: string;
   replyFence: string;
   replyMeta: string;
 };
@@ -59,6 +60,8 @@ export function PhoneChatDemo({ copy }: PhoneChatDemoProps) {
     let reply = copy.replyDefault;
     if (lower.includes("kitchen") || lower.includes("backsplash") || lower.includes("cabinet")) {
       reply = copy.replyKitchen;
+    } else if (lower.includes("nz$") || lower.includes("m²") || lower.includes("18 m")) {
+      reply = copy.replyNzRoof ?? copy.replyRoof;
     } else if (lower.includes("roof") || lower.includes("shingle") || lower.includes("tear off")) {
       reply = copy.replyRoof;
     } else if (lower.includes("fence")) {

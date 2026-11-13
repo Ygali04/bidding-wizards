@@ -7,6 +7,8 @@ export type QtyMaterialLine = {
   unitCost: number;
 };
 
+import type { AreaUnit } from "./markets";
+
 /** Bid line priced as length × width × $/sq ft (not a sidecar calculator). */
 export type SqFtLine = {
   kind: "sqft";
@@ -17,7 +19,20 @@ export type SqFtLine = {
   pricePerSqFt: number;
 };
 
-export type MaterialLine = QtyMaterialLine | SqFtLine;
+/** Same L×W×rate math as sq-ft, in metres / price per m² (or later, other units). */
+export type AreaLine = {
+  kind: "area";
+  id: string;
+  item: string;
+  length: number;
+  width: number;
+  unit: AreaUnit;
+  pricePerArea: number;
+};
+
+export type AreaPricedLine = SqFtLine | AreaLine;
+
+export type MaterialLine = QtyMaterialLine | AreaPricedLine;
 
 export type LaborLine = {
   id: string;
@@ -57,31 +72,57 @@ function lineMoney(qty: number, unit: number): number {
   return roundCents(qty * unit);
 }
 
-/** Area in sq ft from L×W. Invalid or negative sides count as 0. */
-export function sqFtArea(line: Pick<SqFtLine, "length" | "width">): number {
+/** Area from L×W. Invalid or negative sides count as 0. Unit-agnostic. */
+export function lineArea(line: Pick<AreaPricedLine, "length" | "width">): number {
   const { length, width } = line;
   if (!Number.isFinite(length) || !Number.isFinite(width)) return 0;
   if (length < 0 || width < 0) return 0;
   return length * width;
 }
 
+/** @deprecated use lineArea — same L×W. */
+export function sqFtArea(line: Pick<SqFtLine, "length" | "width">): number {
+  return lineArea(line);
+}
+
+export function linePricePerArea(line: AreaPricedLine): number {
+  return line.kind === "sqft" ? line.pricePerSqFt : line.pricePerArea;
+}
+
+export function lineAreaUnit(line: AreaPricedLine): AreaUnit {
+  return line.kind === "sqft" ? "ft" : line.unit;
+}
+
+/** Dollars for an area bid line: area × rate, rounded to cents. */
+export function areaAmount(line: AreaPricedLine): number {
+  return lineMoney(lineArea(line), linePricePerArea(line));
+}
+
 /** Dollars for a sq-ft bid line: area × $/sf, rounded to cents. */
 export function sqFtAmount(line: SqFtLine): number {
-  return lineMoney(sqFtArea(line), line.pricePerSqFt);
+  return areaAmount(line);
 }
 
 export function isSqFtLine(line: MaterialLine): line is SqFtLine {
   return line.kind === "sqft";
 }
 
+export function isAreaLine(line: MaterialLine): line is AreaLine {
+  return line.kind === "area";
+}
+
+export function isAreaPricedLine(line: MaterialLine): line is AreaPricedLine {
+  return line.kind === "sqft" || line.kind === "area";
+}
+
 export function materialTotal(line: MaterialLine): number {
-  if (isSqFtLine(line)) return sqFtAmount(line);
+  if (isAreaPricedLine(line)) return areaAmount(line);
   return lineMoney(line.quantity, line.unitCost);
 }
 
 /** Qty or derived area — used when labor hours scale with coverage. */
 export function materialQtyOrArea(line: MaterialLine): number {
-  if (isSqFtLine(line)) return sqFtArea(line);
+  if (isAreaPricedLine(line)) return lineArea(line);
   return Number.isFinite(line.quantity) && line.quantity > 0 ? line.quantity : 0;
 }
 
@@ -101,7 +142,7 @@ function clampPct(n: number): number {
 /**
  * Stated rules, computed in plain code (never by a model):
  *
- * materials  = Σ qty × unit cost  +  Σ (L × W × $/sf)
+ * materials  = Σ qty × unit cost  +  Σ (L × W × rate)  (rate is $/sf or $/m²)
  * labor      = Σ hours × rate
  * direct     = materials + labor
  * contingency = direct × contingency%
@@ -151,6 +192,14 @@ export function emptyMaterial(): QtyMaterialLine {
 
 export function emptySqFt(): SqFtLine {
   return { kind: "sqft", id: newId(), item: "", length: 0, width: 0, pricePerSqFt: 0 };
+}
+
+export function emptyArea(unit: AreaUnit = "m"): AreaLine {
+  return { kind: "area", id: newId(), item: "", length: 0, width: 0, unit, pricePerArea: 0 };
+}
+
+export function emptyAreaForUnit(unit: AreaUnit): AreaPricedLine {
+  return unit === "ft" ? emptySqFt() : emptyArea("m");
 }
 
 export function emptyLabor(): LaborLine {

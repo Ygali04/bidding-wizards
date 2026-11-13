@@ -1,4 +1,13 @@
-import { breakdown, isSqFtLine, laborTotal, materialTotal, sqFtArea, type EstimateInput } from "./estimate";
+import {
+  breakdown,
+  isAreaPricedLine,
+  laborTotal,
+  lineArea,
+  lineAreaUnit,
+  linePricePerArea,
+  materialTotal,
+  type EstimateInput,
+} from "./estimate";
 
 function csvCell(v: string | number): string {
   const s = String(v);
@@ -18,7 +27,9 @@ export function toProcoreBudgetCsv(input: EstimateInput, costCodePrefix = "01-")
   let i = 100;
   for (const m of input.materials) {
     if (!m.item && materialTotal(m) === 0) continue;
-    const [qty, uom, unit] = isSqFtLine(m) ? [sqFtArea(m), "SF", m.pricePerSqFt] : [m.quantity, m.unit, m.unitCost];
+    const [qty, uom, unit] = isAreaPricedLine(m)
+      ? [lineArea(m), lineAreaUnit(m) === "m" ? "M2" : "SF", linePricePerArea(m)]
+      : [m.quantity, m.unit, m.unitCost];
     rows.push([`${costCodePrefix}${i++}`, "M", m.item, qty, uom, n2(unit), n2(materialTotal(m))]);
   }
   for (const l of input.labor) {
@@ -49,7 +60,9 @@ export function toQuickBooksIif(input: EstimateInput, customer: string, date = n
     lines.push(`SPL\tESTIMATE\t${d}\tEstimates\t\t${n2(-qty * price * factor)}\t${-qty}\t${n2(price * factor)}\t${item.replace(/\t/g, " ")}\t`);
   for (const m of input.materials) {
     if (materialTotal(m) === 0) continue;
-    isSqFtLine(m) ? spl(m.item || "Material", sqFtArea(m), m.pricePerSqFt) : spl(m.item || "Material", m.quantity, m.unitCost);
+    isAreaPricedLine(m)
+      ? spl(m.item || "Material", lineArea(m), linePricePerArea(m))
+      : spl(m.item || "Material", m.quantity, m.unitCost);
   }
   for (const l of input.labor) if (laborTotal(l) > 0) spl(l.role || "Labor", l.hours, l.rate);
   if (b.gst > 0) lines.push(`SPL\tESTIMATE\t${d}\tEstimates\t\t${n2(-b.gst)}\t-1\t${n2(b.gst)}\tGST\t`);

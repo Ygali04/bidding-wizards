@@ -7,16 +7,19 @@ import {
   type CatalogEntry,
 } from "./catalog";
 import {
+  emptyArea,
   emptyLabor,
   emptyMaterial,
   emptySqFt,
+  isAreaPricedLine,
   materialQtyOrArea,
+  type AreaPricedLine,
   type LaborLine,
   type MaterialLine,
-  type SqFtLine,
 } from "./estimate";
+import { detectMarket, MARKETS, SAMPLE_US_BATH, type AreaUnit, type MarketId } from "./markets";
 
-export const SAMPLE_JOB = `Guest bath remodel. About 48 sq ft of subway tile on the walls, new vanity, toilet, and faucet. Paint the walls — figure 2 gallons. Occupied home, they still need the hall bath. Possible hidden water damage behind the tub surround.`;
+export const SAMPLE_JOB = SAMPLE_US_BATH;
 
 const TRADE_HINTS = [
   "kitchen",
@@ -47,6 +50,8 @@ const TRADE_HINTS = [
   "backsplash",
   "toilet",
   "shingle",
+  "reroof",
+  "re-roof",
   "carpenter",
 ];
 
@@ -70,6 +75,7 @@ const MATERIAL_TO_LABOR: Record<string, string> = {
   lvp: "flooring-installer",
   insulation: "laborer",
   shingles: "roofer",
+  "metal-roof": "roofer",
   underlayment: "roofer",
   "fence-board": "carpenter",
   concrete: "concrete-finisher",
@@ -104,6 +110,8 @@ export type ReadJobOk = {
   labor: LaborLine[];
   markupPct: number;
   contingencyPct: number;
+  gstPct?: number;
+  marketId?: MarketId;
   matched: string[];
   notes: string[];
 };
@@ -118,9 +126,12 @@ export type ReadJobResult = ReadJobOk | ReadJobFail;
 
 function normalize(text: string): string {
   return text
-    .replace(/²/g, "2")
     .toLowerCase()
     .replace(/[’']/g, "'")
+    .replace(/m[²2]/g, "m2")
+    .replace(/nz\$/g, "nzd ")
+    .replace(/a\$/g, "aud ")
+    .replace(/us\$/g, "usd ")
     .replace(/[^a-z0-9./%\- ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -154,7 +165,7 @@ function extractQty(haystack: string, phrase: string, entry: CatalogEntry): numb
   const window = haystack.slice(windowStart, idx >= 0 ? idx + phrase.length + 24 : haystack.length);
 
   const unitish =
-    /(\d+(?:\.\d+)?)\s*(sq\s*ft|sqft|sf|squares?|sq\b|ft|lf|hours?|hrs?|gal(?:lons?)?|sheets?|ea|each|cu\s*yd|yards?)/i;
+    /(\d+(?:\.\d+)?)\s*(sq\s*ft|sqft|sf|m²|m2|sq\s*m|squares?|sq\b|ft|lf|hours?|hrs?|gal(?:lons?)?|sheets?|ea|each|cu\s*yd|yards?)/i;
   const m = window.match(unitish);
   if (m?.[1]) {
     const n = Number.parseFloat(m[1]);
@@ -190,6 +201,7 @@ function extractQty(haystack: string, phrase: string, entry: CatalogEntry): numb
 
   switch (entry.unit) {
     case "sq ft":
+    case "m²":
       return 40;
     case "gal":
       return 2;
@@ -235,14 +247,25 @@ function isOutOfScope(text: string): boolean {
   return tradeHits === 0 || scopeHits > tradeHits;
 }
 
-const AREA_UNIT = String.raw`(?:sq\.?\s*ft|sqft|square\s*feet|square\s*foot|\bsf\b|m2\b|sq\.?\s*m\b|sqm\b|square\s*met(?:re|er)s?)`;
+const FT_AREA_UNIT = String.raw`(?:sq\.?\s*ft|sqft|square\s*feet|square\s*foot|\bsf\b)`;
+const M_AREA_UNIT = String.raw`(?:m2|sq\.?\s*m|square\s*metres?|square\s*meters?)`;
 
 const LOCATION_WORDS =
-  /room|bedroom|bath|kitchen|garage|deck|patio|office|closet|hall|dining|living|floor|area|space|shed|shop|basement|attic|porch|foyer|laundry|mudroom|entry/;
+  /room|bedroom|bath|kitchen|garage|deck|patio|office|closet|hall|dining|living|floor|area|space|shed|shop|basement|attic|porch|foyer|laundry|mudroom|entry|roof/;
 
 const LUMBER_CONTEXT = /stud|lumber|joist|beam|post|plywood|osb|sheet|board|dimensional|fencing/;
 
 const LABEL_STOP = /^(?:and|with|plus|then|also|new|a|an|the|to|for|in|on|at|of|into|from)$/;
+
+export type ParsedAreaPhrase = {
+  item: string;
+  length: number;
+  width: number;
+  unit: AreaUnit;
+  pricePerArea?: number;
+  start: number;
+  end: number;
+};
 
 export type ParsedSqFtPhrase = {
   item: string;
@@ -251,6 +274,10 @@ export type ParsedSqFtPhrase = {
   start: number;
   end: number;
 };
+
+function asSqFtPhrase(p: ParsedAreaPhrase): ParsedSqFtPhrase {
+  return { item: p.item, length: p.length, width: p.width, start: p.start, end: p.end };
+}
 
 function titleCase(s: string): string {
   return s
@@ -272,7 +299,8 @@ function cleanLabel(raw: string): string {
     .join(" ");
 }
 
-function looksLikeLumber(length: number, width: number, context: string): boolean {
+function looksLikeLumber(length: number, width: number, context: string, unit: AreaUnit): boolean {
+  if (unit === "m") return false;
   if (LUMBER_CONTEXT.test(context)) return true;
   const a = Math.min(length, width);
   const b = Math.max(length, width);
@@ -285,86 +313,143 @@ function overlaps(used: Array<[number, number]>, start: number, end: number): bo
   return used.some(([a, b]) => start < b && end > a);
 }
 
+type PriceSpan = { start: number; end: number; price: number; unit: AreaUnit };
+
+function parsePricePerAreaSpans(text: string): PriceSpan[] {
+  const re =
+    /(?:nzd|aud|usd|\$)?\s*(\d+(?:\.\d+)?)\s*(?:\/|per)\s*(m2|sq\.?\s*m|square\s*metres?|square\s*meters?|sq\.?\s*ft|sqft|sf)/gi;
+  const out: PriceSpan[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const price = Number.parseFloat(m[1] ?? "0");
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const u = (m[2] ?? "").replace(/\s+/g, "");
+    const unit: AreaUnit = /m2|sqm|squaremetre|squaremeter/.test(u) ? "m" : "ft";
+    out.push({ start: m.index, end: m.index + m[0].length, price, unit });
+  }
+  return out;
+}
+
+function nearestPrice(prices: PriceSpan[], start: number, end: number, unit: AreaUnit): number | undefined {
+  let best: PriceSpan | undefined;
+  let bestDist = Infinity;
+  for (const p of prices) {
+    if (p.unit !== unit) continue;
+    const dist = p.start >= end ? p.start - end : start >= p.end ? start - p.end : 0;
+    if (dist < bestDist) {
+      best = p;
+      bestDist = dist;
+    }
+  }
+  return best && bestDist < 80 ? best.price : undefined;
+}
+
+function labelAround(text: string, start: number, end: number, fallback: string): string {
+  const before = text.slice(Math.max(0, start - 48), start).replace(/[\s,.:;-]+$/g, "");
+  const beforeMatch = before.match(/([a-z][a-z0-9+\-]{1,24}(?:\s+[a-z][a-z0-9+\-]{1,24}){0,3})$/);
+  const after = text.slice(end, end + 40).replace(/^[\s,.:;-]+/, "");
+  const afterMatch = after.match(/^([a-z][a-z0-9+\-\s]{0,36}?)(?=\s+(?:\d|and|with|plus|nzd|aud|usd|,|;|\.|$)|$)/);
+  const label = cleanLabel(beforeMatch?.[1] ?? afterMatch?.[1] ?? "");
+  return titleCase(label) || fallback;
+}
+
 /**
- * Pull L×W rooms and “N sq ft covering” phrases from a free-text brief.
- * Area-only phrases become length = N, width = 1 so dollars still equal N × $/sf.
+ * L×W rooms in feet or metres, plus “N sq ft / N m² covering”.
+ * Area-only phrases become length = N, width = 1 so amount still equals N × rate.
  */
-export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
+export function parseAreaPhrases(raw: string): ParsedAreaPhrase[] {
   const text = normalize(raw);
   const used: Array<[number, number]> = [];
-  const results: ParsedSqFtPhrase[] = [];
+  const results: ParsedAreaPhrase[] = [];
+  const prices = parsePricePerAreaSpans(text);
 
   const dimRe =
-    /\b(\d+(?:\.\d+)?)\s*(?:'|ft|feet|m\b|metres?|meters?)?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|m\b|metres?|meters?)?/gi;
+    /\b(\d+(?:\.\d+)?)\s*(m|metres?|meters?|'|ft|feet)?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(m|metres?|meters?|'|ft|feet)?/gi;
   let m: RegExpExecArray | null;
   while ((m = dimRe.exec(text))) {
     const start = m.index;
     const end = start + m[0].length;
     const length = Number.parseFloat(m[1] ?? "0");
-    const width = Number.parseFloat(m[2] ?? "0");
+    const width = Number.parseFloat(m[3] ?? "0");
     if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) continue;
+    const u1 = (m[2] ?? "").toLowerCase();
+    const u2 = (m[4] ?? "").toLowerCase();
+    const unit: AreaUnit =
+      /^(m|metre|metres|meter|meters)$/.test(u1) || /^(m|metre|metres|meter|meters)$/.test(u2) ? "m" : "ft";
     const ctx = text.slice(Math.max(0, start - 16), Math.min(text.length, end + 28));
-    if (looksLikeLumber(length, width, ctx)) continue;
+    if (looksLikeLumber(length, width, ctx, unit)) continue;
     if (overlaps(used, start, end)) continue;
     used.push([start, end]);
-    const after = text.slice(end, end + 40).replace(/^[\s,.:;-]+/, "");
-    const labelMatch = after.match(/^([a-z][a-z0-9+\-\s]{0,36}?)(?=\s+(?:\d|and|with|plus|,|;|\.|$)|$)/);
-    const label = labelMatch ? cleanLabel(labelMatch[1] ?? "") : "";
     results.push({
-      item: titleCase(label) || "Room",
+      item: labelAround(text, start, end, unit === "m" ? "Area work" : "Room"),
       length,
       width,
+      unit,
+      pricePerArea: nearestPrice(prices, start, end, unit),
       start,
       end,
     });
   }
 
-  const areaAfter = new RegExp(
-    String.raw`\b(\d+(?:\.\d+)?)\s*${AREA_UNIT}(?:\s+of)?(?:\s+([a-z]+(?:[ \-][a-z]+){0,2}))?`,
-    "gi",
-  );
-  while ((m = areaAfter.exec(text))) {
-    const start = m.index;
-    const end = start + m[0].length;
-    if (overlaps(used, start, end)) continue;
-    const area = Number.parseFloat(m[1] ?? "0");
-    if (!Number.isFinite(area) || area <= 0) continue;
-    used.push([start, end]);
-    const label = cleanLabel(m[2] ?? "");
-    results.push({
-      item: titleCase(label) || "Sq ft work",
-      length: area,
-      width: 1,
-      start,
-      end,
-    });
-  }
-
-  const areaBefore = new RegExp(String.raw`\b([a-z][a-z0-9+\-\s]{2,40}?)\s+(\d+(?:\.\d+)?)\s*${AREA_UNIT}`, "gi");
-  while ((m = areaBefore.exec(text))) {
-    const start = m.index;
-    const end = start + m[0].length;
-    if (overlaps(used, start, end)) continue;
-    const area = Number.parseFloat(m[2] ?? "0");
-    if (!Number.isFinite(area) || area <= 0) continue;
-    const label = cleanLabel(m[1] ?? "");
-    if (!label || TRADE_HINTS.every((h) => !label.includes(h) && !LOCATION_WORDS.test(label))) {
-      // Keep generic coverings like "flooring" even if not in TRADE_HINTS as a whole token.
-      if (!/(floor|tile|carpet|hardwood|vinyl|lvp|deck|patio|paint|drywall|insulation|sod|roof)/.test(label)) {
-        continue;
-      }
+  const collectAreaOnly = (unit: AreaUnit, unitRe: string, fallback: string) => {
+    const areaAfter = new RegExp(
+      String.raw`\b(\d+(?:\.\d+)?)\s*${unitRe}(?:\s+of)?(?:\s+([a-z]+(?:[ \-][a-z]+){0,2}))?`,
+      "gi",
+    );
+    while ((m = areaAfter.exec(text))) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (overlaps(used, start, end)) continue;
+      const area = Number.parseFloat(m[1] ?? "0");
+      if (!Number.isFinite(area) || area <= 0) continue;
+      used.push([start, end]);
+      const label = cleanLabel(m[2] ?? "");
+      results.push({
+        item: titleCase(label) || fallback,
+        length: area,
+        width: 1,
+        unit,
+        pricePerArea: nearestPrice(prices, start, end, unit),
+        start,
+        end,
+      });
     }
-    used.push([start, end]);
-    results.push({
-      item: titleCase(label) || "Sq ft work",
-      length: area,
-      width: 1,
-      start,
-      end,
-    });
-  }
 
+    const areaBefore = new RegExp(String.raw`\b([a-z][a-z0-9+\-\s]{2,40}?)\s+(\d+(?:\.\d+)?)\s*${unitRe}`, "gi");
+    while ((m = areaBefore.exec(text))) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (overlaps(used, start, end)) continue;
+      const area = Number.parseFloat(m[2] ?? "0");
+      if (!Number.isFinite(area) || area <= 0) continue;
+      const label = cleanLabel(m[1] ?? "");
+      if (!label || TRADE_HINTS.every((h) => !label.includes(h) && !LOCATION_WORDS.test(label))) {
+        if (!/(floor|tile|carpet|hardwood|vinyl|lvp|deck|patio|paint|drywall|insulation|sod|roof)/.test(label)) {
+          continue;
+        }
+      }
+      used.push([start, end]);
+      results.push({
+        item: titleCase(label) || fallback,
+        length: area,
+        width: 1,
+        unit,
+        pricePerArea: nearestPrice(prices, start, end, unit),
+        start,
+        end,
+      });
+    }
+  };
+
+  collectAreaOnly("ft", FT_AREA_UNIT, "Sq ft work");
+  collectAreaOnly("m", M_AREA_UNIT, "Area work");
   return results;
+}
+
+export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
+  return parseAreaPhrases(raw)
+    .filter((p) => p.unit === "ft")
+    .map(asSqFtPhrase);
 }
 
 function maskSpans(text: string, spans: Array<{ start: number; end: number }>): string {
@@ -376,7 +461,7 @@ function maskSpans(text: string, spans: Array<{ start: number; end: number }>): 
   return chars.join("").replace(/\s+/g, " ").trim();
 }
 
-function catalogForSqFtItem(item: string): CatalogEntry | undefined {
+function catalogForAreaItem(item: string, unit: AreaUnit): CatalogEntry | undefined {
   const n = item.toLowerCase();
   const aliases: Record<string, string> = {
     flooring: "hardwood",
@@ -391,20 +476,32 @@ function catalogForSqFtItem(item: string): CatalogEntry | undefined {
     quartz: "countertop",
     countertop: "countertop",
     countertops: "countertop",
+    "re-roof": "metal-roof",
+    reroof: "metal-roof",
+    roof: "metal-roof",
+    roofing: "metal-roof",
+    "metal roofing": "metal-roof",
   };
   const aliasId = Object.keys(aliases).find((k) => n === k || n.includes(k));
   if (aliasId) {
     const hit = CATALOG.find((c) => c.id === aliases[aliasId]);
-    if (hit) return hit;
+    if (hit) {
+      if (unit === "m" && hit.unit === "sq ft") {
+        /* keep name, caller supplies price */
+      }
+      return hit;
+    }
   }
   let best: CatalogEntry | undefined;
   let bestScore = 0;
+  const wantUnit = unit === "m" ? "m²" : "sq ft";
   for (const entry of CATALOG) {
-    if (entry.kind !== "material" || entry.unit !== "sq ft") continue;
+    if (entry.kind !== "material") continue;
+    if (entry.unit !== wantUnit && entry.unit !== "sq ft" && entry.unit !== "m²") continue;
     for (const phrase of [...entry.phrases, entry.name.toLowerCase()]) {
       const p = phrase.toLowerCase();
       if (n.includes(p) || p.includes(n)) {
-        const score = p.length;
+        const score = p.length + (entry.unit === wantUnit ? 20 : 0);
         if (score > bestScore) {
           best = entry;
           bestScore = score;
@@ -415,15 +512,39 @@ function catalogForSqFtItem(item: string): CatalogEntry | undefined {
   return best;
 }
 
-function sqFtCoversCatalog(entry: CatalogEntry, sqft: SqFtLine[]): boolean {
-  if (sqft.length === 0) return false;
-  const blob = sqft.map((s) => s.item.toLowerCase()).join(" | ");
+function areaCoversCatalog(entry: CatalogEntry, lines: AreaPricedLine[]): boolean {
+  if (lines.length === 0) return false;
+  const blob = lines.map((s) => s.item.toLowerCase()).join(" | ");
   const names = [entry.name, ...entry.phrases].map((s) => s.toLowerCase());
   if (names.some((n) => blob.includes(n))) return true;
-  if (entry.unit === "sq ft" && names.some((n) => n.split(/\s+/).every((w) => w.length < 4 || blob.includes(w)))) {
+  if (
+    (entry.unit === "sq ft" || entry.unit === "m²" || entry.id === "shingles" || entry.id === "underlayment") &&
+    names.some((n) => n.split(/\s+/).every((w) => w.length < 4 || blob.includes(w)))
+  ) {
     return blob.length > 0 && names.some((n) => overlapScore(tokens(blob), n) >= 0.5);
   }
+  if (entry.id === "shingles" && /roof|reroof|metal/.test(blob)) return true;
   return false;
+}
+
+function toAreaLine(parsed: ParsedAreaPhrase): AreaPricedLine {
+  const cat = catalogForAreaItem(parsed.item, parsed.unit);
+  const price = parsed.pricePerArea ?? cat?.defaultCost ?? 0;
+  const item = cat?.name ?? parsed.item;
+  if (parsed.unit === "m") {
+    const line = emptyArea("m");
+    line.item = item;
+    line.length = parsed.length;
+    line.width = parsed.width;
+    line.pricePerArea = price;
+    return line;
+  }
+  const line = emptySqFt();
+  line.item = item;
+  line.length = parsed.length;
+  line.width = parsed.width;
+  line.pricePerSqFt = price;
+  return line;
 }
 
 /**
@@ -438,32 +559,24 @@ export function readJob(raw: string): ReadJobResult {
   }
 
   const haystackFull = normalize(text);
-  const sqftParsed = parseSqFtPhrases(haystackFull);
-  const haystack = maskSpans(haystackFull, sqftParsed);
+  const areaParsed = parseAreaPhrases(haystackFull);
+  const haystack = maskSpans(haystackFull, [...areaParsed, ...parsePricePerAreaSpans(haystackFull)]);
 
   if (isOutOfScope(haystackFull)) {
     return {
       ok: false,
       reason: "out_of_scope",
       message:
-        "This reads like it isn't a trades job (software, legal, catering, medical, tax…). Bidding Wizards only estimates construction work.",
+        "This reads like it isn't a trades job (software, legal, catering, medical, tax…). Wizbid only estimates construction work.",
     };
   }
 
-  const sqftLines = sqftParsed.map((parsed) => {
-    const line = emptySqFt();
-    const cat = catalogForSqFtItem(parsed.item);
-    line.item = cat?.name ?? parsed.item;
-    line.length = parsed.length;
-    line.width = parsed.width;
-    line.pricePerSqFt = cat?.defaultCost ?? 0;
-    return line;
-  });
-  const materials: MaterialLine[] = [...sqftLines];
+  const areaLines = areaParsed.map(toAreaLine);
+  const materials: MaterialLine[] = [...areaLines];
   const labor: LaborLine[] = [];
-  const matched: string[] = sqftLines.map((l) => l.item);
+  const matched: string[] = areaLines.map((l) => l.item);
   const usedIds = new Set<string>();
-  for (const line of sqftLines) {
+  for (const line of areaLines) {
     const cat = CATALOG.find((c) => c.name === line.item);
     if (cat) usedIds.add(cat.id);
   }
@@ -487,7 +600,7 @@ export function readJob(raw: string): ReadJobResult {
 
   for (const row of ranked) {
     if (usedIds.has(row.entry.id)) continue;
-    if (sqFtCoversCatalog(row.entry, sqftLines)) continue;
+    if (areaCoversCatalog(row.entry, areaLines)) continue;
     usedIds.add(row.entry.id);
     matched.push(row.entry.name);
     const qty = extractQty(haystack, row.bestPhrase, row.entry);
@@ -507,20 +620,27 @@ export function readJob(raw: string): ReadJobResult {
     }
   }
 
-  for (const mat of [...materials]) {
-    const cat = CATALOG.find((c) => c.name === mat.item);
-    if (!cat) continue;
-    const laborId = MATERIAL_TO_LABOR[cat.id];
-    if (!laborId || usedIds.has(laborId)) continue;
-    const laborCat = CATALOG.find((c) => c.id === laborId);
-    if (!laborCat) continue;
-    usedIds.add(laborId);
-    matched.push(laborCat.name);
-    const line = emptyLabor();
-    line.role = laborCat.name;
-    line.rate = laborCat.defaultCost;
-    line.hours = laborHoursFor(laborCat, materials);
-    labor.push(line);
+  const quotedAreaOnly =
+    areaParsed.some((p) => p.pricePerArea != null) &&
+    materials.length > 0 &&
+    materials.every(isAreaPricedLine);
+
+  if (!quotedAreaOnly) {
+    for (const mat of [...materials]) {
+      const cat = CATALOG.find((c) => c.name === mat.item);
+      if (!cat) continue;
+      const laborId = MATERIAL_TO_LABOR[cat.id];
+      if (!laborId || usedIds.has(laborId)) continue;
+      const laborCat = CATALOG.find((c) => c.id === laborId);
+      if (!laborCat) continue;
+      usedIds.add(laborId);
+      matched.push(laborCat.name);
+      const line = emptyLabor();
+      line.role = laborCat.name;
+      line.rate = laborCat.defaultCost;
+      line.hours = laborHoursFor(laborCat, materials);
+      labor.push(line);
+    }
   }
 
   if (materials.length === 0 && labor.length === 0) {
@@ -550,10 +670,17 @@ export function readJob(raw: string): ReadJobResult {
   if (materials.length === 0) {
     notes.push("No catalog materials matched — add lines by hand.");
   }
-  if (sqftLines.length) {
-    notes.push("Area lines are on the bid (length × width × price per unit area) — edit length, width, or price.");
+  if (areaLines.length) {
+    notes.push("Area lines are on the bid (L×W×rate) — edit length, width, or price.");
   }
-  if (labor.length === 0) {
+  if (quotedAreaOnly) {
+    markupPct = 0;
+    contingencyPct = 0;
+    notes.push("Quoted area rate is the bid line. Tax sits on top — add markup only if that rate is cost.");
+  }
+  const marketId = detectMarket(text);
+  const gstPct = marketId ? MARKETS[marketId].taxPct : undefined;
+  if (labor.length === 0 && !quotedAreaOnly) {
     notes.push("No labor matched — add crew hours by hand.");
   }
 
@@ -563,6 +690,8 @@ export function readJob(raw: string): ReadJobResult {
     labor,
     markupPct,
     contingencyPct,
+    gstPct,
+    marketId,
     matched,
     notes,
   };

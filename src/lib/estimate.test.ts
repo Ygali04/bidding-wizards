@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakdown, sqFtAmount, sqFtArea, type EstimateInput } from "./estimate";
+import { areaAmount, breakdown, isAreaLine, lineArea, sqFtAmount, sqFtArea, type EstimateInput } from "./estimate";
 
 function input(partial: Partial<EstimateInput> = {}): EstimateInput {
   return {
@@ -103,6 +103,34 @@ describe("breakdown", () => {
     });
     expect(b.materials).toBe(0);
     expect(b.bidTotal).toBe(0);
+  });
+});
+
+describe("metric area lines", () => {
+  it("computes m² = L×W and amount = area × $/m², then GST 15% on the bid", () => {
+    const line = {
+      kind: "area" as const,
+      id: "r1",
+      item: "Re-roof",
+      length: 18,
+      width: 12,
+      unit: "m" as const,
+      pricePerArea: 85,
+    };
+    expect(lineArea(line)).toBe(216);
+    expect(areaAmount(line)).toBe(18360);
+    expect(isAreaLine(line)).toBe(true);
+    const b = breakdown({
+      materials: [line],
+      labor: [],
+      contingencyPct: 0,
+      markupPct: 0,
+      gstPct: 15,
+    });
+    expect(b.materials).toBe(18360);
+    expect(b.bidTotal).toBe(18360);
+    expect(b.gst).toBe(2754);
+    expect(b.totalIncGst).toBe(21114);
   });
 });
 

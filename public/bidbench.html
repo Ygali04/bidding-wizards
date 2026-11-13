@@ -130,16 +130,24 @@
     <h2><span class="step">2</span>Materials</h2>
     <table id="matTable">
       <thead>
-        <tr><th>Item</th><th class="num">Quantity</th><th class="num">Unit cost</th><th class="num">Line total</th><th></th></tr>
+        <tr>
+          <th>Item</th>
+          <th class="num">Length (m)</th>
+          <th class="num">Width (m)</th>
+          <th class="num">Area (m²)</th>
+          <th class="num">Price per m²</th>
+          <th class="num">Amount</th>
+          <th></th>
+        </tr>
       </thead>
       <tbody id="matBody"></tbody>
       <tfoot>
-        <tr><td colspan="3">Materials subtotal</td><td class="num" id="matSubtotal">$0.00</td><td></td></tr>
+        <tr><td colspan="5">Materials subtotal</td><td class="num" id="matSubtotal">$0.00</td><td></td></tr>
       </tfoot>
     </table>
     <div class="row-actions">
       <button type="button" id="addMat" class="primary">+ Add material line</button>
-      <span class="hint" style="margin:0">Quantity &times; unit cost = line total.</span>
+      <span class="hint" style="margin:0">Area (m²) = length &times; width. Amount = area &times; price per m².</span>
     </div>
   </section>
 
@@ -176,8 +184,8 @@
         <input id="markupPct" type="number" min="0" step="0.5" value="0" />
       </div>
       <div>
-        <label for="gstPct">GST (%) &mdash; AU 10, NZ 15, 0 if exempt</label>
-        <input id="gstPct" type="number" min="0" step="0.5" value="10" />
+        <label for="gstPct">GST (%) &mdash; NZ 15, AU 10, 0 if exempt</label>
+        <input id="gstPct" type="number" min="0" step="0.5" value="15" />
       </div>
       <div>
         <label for="marginFloor">Margin floor (%)</label>
@@ -255,7 +263,7 @@
   function $(id){ return document.getElementById(id); }
   function num(v){ var n = parseFloat(v); return isFinite(n) ? n : 0; }
   function money(n){ var r = Math.round((n + Number.EPSILON) * 100) / 100;
-    return "$" + r.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    return new Intl.NumberFormat("en-NZ", {style:"currency", currency:"NZD"}).format(r); }
   function esc(s){ return String(s == null ? "" : s)
       .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
       .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
@@ -264,32 +272,42 @@
     setTimeout(function(){ t.className = "toast"; }, 2200);
   }
 
-  function addRow(item, qty, unit){
+  function addRow(item, length, width, price){
     var tr = document.createElement("tr");
     var td1 = document.createElement("td");
     var iItem = document.createElement("input");
-    iItem.type = "text"; iItem.className = "m-item"; iItem.placeholder = "e.g. 2x6 pressure-treated joist";
+    iItem.type = "text"; iItem.className = "m-item"; iItem.placeholder = "e.g. Re-roof";
     td1.appendChild(iItem);
-    var td2 = document.createElement("td");
-    var iQty = document.createElement("input");
-    iQty.type = "number"; iQty.className = "m-qty"; iQty.min = "0"; iQty.step = "0.5"; iQty.value = "1";
-    td2.appendChild(iQty);
+    var tdL = document.createElement("td");
+    var iLen = document.createElement("input");
+    iLen.type = "number"; iLen.className = "m-len"; iLen.min = "0"; iLen.step = "any"; iLen.value = "0";
+    iLen.setAttribute("aria-label", "Length in metres");
+    tdL.appendChild(iLen);
+    var tdW = document.createElement("td");
+    var iWid = document.createElement("input");
+    iWid.type = "number"; iWid.className = "m-wid"; iWid.min = "0"; iWid.step = "any"; iWid.value = "0";
+    iWid.setAttribute("aria-label", "Width in metres");
+    tdW.appendChild(iWid);
+    var tdA = document.createElement("td");
+    tdA.className = "num m-area"; tdA.textContent = "0 m²";
     var td3 = document.createElement("td");
     var iCost = document.createElement("input");
     iCost.type = "number"; iCost.className = "m-cost"; iCost.min = "0"; iCost.step = "0.01"; iCost.value = "0";
+    iCost.setAttribute("aria-label", "Price per square metre");
     td3.appendChild(iCost);
     var td4 = document.createElement("td");
-    td4.className = "num row-total"; td4.textContent = "$0.00";
+    td4.className = "num row-total"; td4.textContent = money(0);
     var td5 = document.createElement("td");
     var bDel = document.createElement("button");
     bDel.type = "button"; bDel.className = "link"; bDel.textContent = "Remove";
     bDel.setAttribute("aria-label", "Remove material line");
     bDel.addEventListener("click", function(){ tr.parentNode.removeChild(tr); recalc(); });
     td5.appendChild(bDel);
-    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
+    tr.appendChild(td1); tr.appendChild(tdL); tr.appendChild(tdW); tr.appendChild(tdA); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
     if (item !== undefined) iItem.value = item;
-    if (qty !== undefined) iQty.value = qty;
-    if (unit !== undefined) iCost.value = unit;
+    if (length !== undefined) iLen.value = length;
+    if (width !== undefined) iWid.value = width;
+    if (price !== undefined) iCost.value = price;
     tr.addEventListener("input", recalc);
     $("matBody").appendChild(tr);
     iItem.focus();
@@ -300,9 +318,12 @@
     var mat = 0;
     var trs = $("matBody").querySelectorAll("tr");
     for (var i = 0; i < trs.length; i++){
-      var q = num(trs[i].querySelector(".m-qty").value);
+      var len = num(trs[i].querySelector(".m-len").value);
+      var wid = num(trs[i].querySelector(".m-wid").value);
+      var q = (len < 0 || wid < 0) ? 0 : len * wid;
       var c = num(trs[i].querySelector(".m-cost").value);
       var line = q * c;
+      trs[i].querySelector(".m-area").textContent = q.toLocaleString("en-NZ") + " m²";
       trs[i].querySelector(".row-total").textContent = money(line);
       mat += line;
     }
@@ -363,9 +384,11 @@
     var trs = $("matBody").querySelectorAll("tr");
     for (var i = 0; i < trs.length; i++){
       var item = trs[i].querySelector(".m-item").value || "(material)";
-      var q = num(trs[i].querySelector(".m-qty").value);
+      var len = num(trs[i].querySelector(".m-len").value);
+      var wid = num(trs[i].querySelector(".m-wid").value);
+      var q = (len < 0 || wid < 0) ? 0 : len * wid;
       var c = num(trs[i].querySelector(".m-cost").value);
-      lines.push("• " + item + " — " + q + " × " + money(c) + " = " + money(q * c));
+      lines.push("• " + item + " — " + len + " m × " + wid + " m = " + q + " m² × " + money(c) + "/m² = " + money(q * c));
     }
     lines.push("");
     lines.push("Materials: " + money(t.mat));
@@ -431,7 +454,7 @@
     var bAdd = $("addSug");
     if (bAdd) bAdd.addEventListener("click", function(){
       for (var k = 0; k < obj.materials.length; k++){
-        addRow(obj.materials[k].item, num(obj.materials[k].qty), num(obj.materials[k].unitCost));
+        addRow(obj.materials[k].item, num(obj.materials[k].qty), 1, num(obj.materials[k].unitCost));
       }
       recalc(); toast("Added " + obj.materials.length + " material line(s)");
     });
@@ -482,18 +505,16 @@
 
   function loadExample(){
     $("matBody").innerHTML = "";
-    addRow("2x6 pressure-treated joist", 18, 9.5);
-    addRow("5/4 in pressure-treated deck board", 60, 12.4);
-    addRow("4x4 pressure-treated post", 4, 14);
-    addRow("Railing hardware & fasteners", 1, 320);
-    $("jobName").value = "Deck rebuild — 12x12";
-    $("jobAddress").value = "Columbus, OH";
+    addRow("Re-roof", 18, 12, 85);
+    $("jobName").value = "Re-roof — 18 m × 12 m";
+    $("jobAddress").value = "New Zealand";
     $("jobDate").value = new Date().toISOString().slice(0,10);
-    $("laborHours").value = 24;
-    $("laborRate").value = 65;
-    $("contingencyPct").value = 10;
-    $("markupPct").value = 25;
-    $("scopeText").value = "Rebuild a 12x12 pressure-treated deck about 6 ft above grade. The old joists are rotted on one side and the railing is original 1990s cedar. Lumber prices are climbing and the city wants a drawing before the permit.";
+    $("laborHours").value = 0;
+    $("laborRate").value = 0;
+    $("contingencyPct").value = 0;
+    $("markupPct").value = 0;
+    $("gstPct").value = 15;
+    $("scopeText").value = "Re-roof, 18 m x 12 m, NZ$85 per m²";
     recalc();
   }
 
@@ -513,8 +534,7 @@
     $(id).addEventListener("input", recalc);
   });
 
-  addRow();
-  recalc();
+  loadExample();
 })();
 </script>
 </body>

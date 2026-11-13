@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { BlueprintUpload } from "../components/BlueprintUpload";
 import { JobDetails } from "../components/JobDetails";
 import { bidText } from "../lib/bidText";
@@ -8,50 +8,89 @@ import { DEFAULT_CONTINGENCY, DEFAULT_MARKUP } from "../lib/catalog";
 import type { BlueprintTakeoff } from "../lib/blueprintMock";
 import {
   breakdown,
+  emptyAreaForUnit,
   emptyLabor,
   emptyMaterial,
-  emptySqFt,
+  isAreaPricedLine,
   isSqFtLine,
   laborTotal,
+  lineArea,
+  lineAreaUnit,
+  linePricePerArea,
   marginAfterOverrun,
   markupForMargin,
   materialTotal,
-  sqFtArea,
+  type AreaPricedLine,
   type LaborLine,
   type MaterialLine,
   type QtyMaterialLine,
-  type SqFtLine,
 } from "../lib/estimate";
 import { applyFormHints } from "../lib/documentDecision";
+import {
+  bidSearch,
+  inferMarket,
+  labelsForAreaUnit,
+  MARKETS,
+  MARKET_LIST,
+  marketFromSearchParams,
+  resolveMarket,
+  sampleFromSearchParams,
+  type MarketId,
+} from "../lib/markets";
 import { money, parseNumber, pct } from "../lib/money";
 import { processDocumentsClient } from "../lib/processDocumentClient";
-import { SAMPLE_JOB, readJob } from "../lib/readJob";
+import { readJob } from "../lib/readJob";
 import { download, toProcoreBudgetCsv, toQuickBooksIif } from "../lib/exports";
 
 type Status = { kind: "idle" } | { kind: "ok"; text: string } | { kind: "err"; text: string };
 
 export function Estimator() {
+  const [params, setParams] = useSearchParams();
+  const language = typeof navigator !== "undefined" ? navigator.language : "";
+  const timeZone =
+    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+  const marketId = resolveMarket(params, language, timeZone);
+  const wantSample = sampleFromSearchParams(params);
+  const market = MARKETS[marketId];
+
   const [saved] = useState(loadDraft);
-  const [job, setJob] = useState<JobInfo>(saved?.job ?? emptyJob());
-  const [notes, setNotes] = useState(saved?.notes ?? "");
+  const skipDraft = wantSample;
+  const [job, setJob] = useState<JobInfo>(skipDraft ? emptyJob() : (saved?.job ?? emptyJob()));
+  const [notes, setNotes] = useState(skipDraft ? market.sampleBrief : (saved?.notes ?? ""));
   const [materials, setMaterials] = useState<MaterialLine[]>(
-    saved?.materials.length ? saved.materials : [emptyMaterial()],
+    skipDraft ? [emptyAreaForUnit(market.areaUnit)] : saved?.materials.length ? saved.materials : [emptyAreaForUnit(market.areaUnit)],
   );
-  const [labor, setLabor] = useState<LaborLine[]>(saved?.labor.length ? saved.labor : [emptyLabor()]);
-  const [markupPct, setMarkupPct] = useState(saved?.markupPct ?? DEFAULT_MARKUP);
-  const [contingencyPct, setContingencyPct] = useState(saved?.contingencyPct ?? DEFAULT_CONTINGENCY);
+  const [labor, setLabor] = useState<LaborLine[]>(
+    skipDraft ? [emptyLabor()] : saved?.labor.length ? saved.labor : [emptyLabor()],
+  );
+  const [markupPct, setMarkupPct] = useState(skipDraft ? 0 : (saved?.markupPct ?? DEFAULT_MARKUP));
+  const [contingencyPct, setContingencyPct] = useState(skipDraft ? 0 : (saved?.contingencyPct ?? DEFAULT_CONTINGENCY));
   const [targetMargin, setTargetMargin] = useState(saved?.targetMargin ?? 15);
-  const [gstPct, setGstPct] = useState(saved?.gstPct ?? 10);
-  // Area lines are L × W × price either way; this only sets the units shown (AU/NZ estimators work in metres).
-  const [metric, setMetric] = useState(true);
+  const [gstPct, setGstPct] = useState(skipDraft ? market.taxPct : (saved?.gstPct ?? market.taxPct));
   const [overrunPct, setOverrunPct] = useState(saved?.overrunPct ?? 10);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [reading, setReading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const $ = (n: number) => money(n, market.currency, market.locale);
 
   const totals = useMemo(
     () => breakdown({ materials, labor, markupPct, contingencyPct, gstPct }),
     [materials, labor, markupPct, contingencyPct, gstPct],
   );
+
+  function writeLoc(id: MarketId, replace = false, dropSample = false) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("loc", id);
+        next.delete("market");
+        if (dropSample) next.delete("sample");
+        return next;
+      },
+      { replace },
+    );
+  }
 
   // Persist the working bid so a refresh or accidental navigation does not lose it.
   useEffect(() => {
@@ -63,16 +102,16 @@ export function Estimator() {
     clearDraft();
     setJob(emptyJob());
     setNotes("");
-    setMaterials([emptyMaterial()]);
+    setMaterials([emptyAreaForUnit(market.areaUnit)]);
     setLabor([emptyLabor()]);
     setMarkupPct(DEFAULT_MARKUP);
     setContingencyPct(DEFAULT_CONTINGENCY);
-    setGstPct(10);
+    setGstPct(market.taxPct);
     setStatus({ kind: "idle" });
   }
 
   async function copyBid() {
-    const text = bidText(job, { materials, labor, markupPct, contingencyPct, gstPct }, metric);
+    const text = bidText(job, { materials, labor, markupPct, contingencyPct, gstPct }, market);
     try {
       await navigator.clipboard.writeText(text);
       setStatus({ kind: "ok", text: "Bid copied as plain text." });
@@ -94,10 +133,13 @@ export function Estimator() {
       classified.ok && !classified.mock
         ? applyFormHints(result.contingencyPct, classified.formHints)
         : result.contingencyPct;
-    setMaterials(result.materials.length ? result.materials : [emptyMaterial()]);
+    const unit = MARKETS[result.marketId ?? marketId].areaUnit;
+    setMaterials(result.materials.length ? result.materials : [emptyAreaForUnit(unit)]);
     setLabor(result.labor.length ? result.labor : [emptyLabor()]);
     setMarkupPct(result.markupPct);
     setContingencyPct(contingencyPct);
+    if (result.marketId) writeLoc(result.marketId, false, true);
+    else if (result.gstPct !== undefined) setGstPct(result.gstPct);
     setReading(false);
     const extra = result.notes.length ? ` ${result.notes.join(" ")}` : "";
     const via = classified.ok && !classified.mock ? " Jev classified the form." : "";
@@ -108,8 +150,44 @@ export function Estimator() {
   }
 
   function loadSample() {
-    setNotes(SAMPLE_JOB);
-    void applyRead(SAMPLE_JOB);
+    const brief = MARKETS[marketId].sampleBrief;
+    setNotes(brief);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("loc", marketId);
+      next.set("sample", "1");
+      return next;
+    });
+    void applyRead(brief);
+  }
+
+  useEffect(() => {
+    if (marketFromSearchParams(params)) return;
+    writeLoc(inferMarket(language, timeZone), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setGstPct(MARKETS[marketId].taxPct);
+  }, [marketId]);
+
+  useEffect(() => {
+    if (!wantSample) return;
+    const brief = MARKETS[marketId].sampleBrief;
+    setNotes(brief);
+    void applyRead(brief);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketId, wantSample]);
+
+  async function copyShareLink() {
+    const href = window.location.href;
+    try {
+      await navigator.clipboard.writeText(href);
+    } catch {
+      window.prompt("Copy share link", href);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   }
 
   function applyTakeoff(takeoff: BlueprintTakeoff) {
@@ -138,9 +216,19 @@ export function Estimator() {
           <span className="text-sm font-bold tracking-tight">Bidding Wizards</span>
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <a href="./bidbench.html" className="px-2 text-xs font-semibold text-neutral-500 hover:text-black">
-            Classic BidBench
-          </a>
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-neutral-200 bg-white p-0.5">
+            {MARKET_LIST.map((m) => (
+              <Link
+                key={m.id}
+                to={{ pathname: "/bid", search: bidSearch(m.id, { sample: wantSample }) }}
+                className={`rounded-md px-2 py-1.5 text-[11px] font-semibold ${
+                  marketId === m.id ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"
+                }`}
+              >
+                {m.chip}
+              </Link>
+            ))}
+          </div>
           <button
             type="button"
             onClick={newBid}
@@ -160,7 +248,14 @@ export function Estimator() {
             onClick={loadSample}
             className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
           >
-            Sample job
+            Sample: {market.sampleName}
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyShareLink()}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            {copied ? "Link copied" : "Copy link"}
           </button>
           <button
             type="button"
@@ -210,7 +305,7 @@ export function Estimator() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={5}
-              placeholder="e.g. roof 12 x 8 m, 45 per m², new gutters, guest bath tile, new vanity…"
+              placeholder="e.g. Re-roof, 18 m x 12 m, NZ$85 per m²"
               className="mt-4 w-full resize-y rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
             />
             {status.kind !== "idle" && (
@@ -229,17 +324,11 @@ export function Estimator() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold">Materials</h2>
-                <p className="text-[11px] text-neutral-400">Qty lines and square-footage lines share this bid.</p>
+                <p className="text-[11px] text-neutral-400">
+                  Qty lines and area lines (L×W×{market.pricePerAreaLabel}) share this bid.
+                </p>
               </div>
               <div className="no-print flex gap-3">
-                <button
-                  type="button"
-                  className="rounded-md border border-neutral-200 px-2 text-xs font-semibold text-neutral-700 hover:text-black"
-                  onClick={() => setMetric((m) => !m)}
-                  aria-label="Switch area units"
-                >
-                  {metric ? "Units: m / m²" : "Units: ft / sq ft"}
-                </button>
                 <button
                   type="button"
                   className="text-xs font-semibold text-neutral-700 hover:text-black"
@@ -250,31 +339,37 @@ export function Estimator() {
                 <button
                   type="button"
                   className="text-xs font-semibold text-neutral-700 hover:text-black"
-                  onClick={() => setMaterials((rows) => [...rows, emptySqFt()])}
+                  onClick={() => setMaterials((rows) => [...rows, emptyAreaForUnit(market.areaUnit)])}
                 >
-                  {metric ? "+ Add m² line" : "+ Add sq ft"}
+                  + Add area
                 </button>
               </div>
             </div>
             <div className="space-y-2 overflow-x-auto">
               {materials.map((row, i) =>
-                isSqFtLine(row) ? (
-                  <SqFtRow
-                    metric={metric}
+                isAreaPricedLine(row) ? (
+                  <AreaPricedRow
                     key={row.id}
                     row={row}
+                    currency={market.currency}
+                    formatMoney={$}
                     onChange={(next) => setMaterials((rows) => rows.map((r, idx) => (idx === i ? next : r)))}
                     onRemove={() =>
-                      setMaterials((rows) => (rows.length === 1 ? [emptyMaterial()] : rows.filter((_, idx) => idx !== i)))
+                      setMaterials((rows) =>
+                        rows.length === 1 ? [emptyAreaForUnit(market.areaUnit)] : rows.filter((_, idx) => idx !== i),
+                      )
                     }
                   />
                 ) : (
                   <QtyRow
                     key={row.id}
                     row={row}
+                    formatMoney={$}
                     onChange={(next) => setMaterials((rows) => rows.map((r, idx) => (idx === i ? next : r)))}
                     onRemove={() =>
-                      setMaterials((rows) => (rows.length === 1 ? [emptyMaterial()] : rows.filter((_, idx) => idx !== i)))
+                      setMaterials((rows) =>
+                        rows.length === 1 ? [emptyAreaForUnit(market.areaUnit)] : rows.filter((_, idx) => idx !== i),
+                      )
                     }
                   />
                 ),
@@ -345,7 +440,7 @@ export function Estimator() {
                           className="w-24 rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-neutral-200 focus:border-neutral-900 focus:outline-none"
                         />
                       </td>
-                      <td className="py-1.5 text-right font-medium tabular-nums">{money(laborTotal(row))}</td>
+                      <td className="py-1.5 text-right font-medium tabular-nums">{$(laborTotal(row))}</td>
                       <td className="no-print py-1.5 pl-2 text-right">
                         <button
                           type="button"
@@ -381,7 +476,7 @@ export function Estimator() {
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                GST % (AU 10, NZ 15, 0 if exempt)
+                {market.taxName} % ({market.chip})
               </span>
               <input
                 type="number"
@@ -412,19 +507,19 @@ export function Estimator() {
           <h2 className="text-sm font-bold">Bid breakdown</h2>
           <p className="mt-1 text-[11px] text-neutral-400">Plain arithmetic. Not a model.</p>
           <dl className="mt-4 space-y-2 text-sm">
-            <Row label="Materials" value={money(totals.materials)} />
-            <Row label="Labor" value={money(totals.labor)} />
-            <Row label="Contingency" value={money(totals.contingency)} hint={`${pct(contingencyPct)} of direct`} />
-            <Row label="Markup" value={money(totals.markup)} hint={`${pct(markupPct)} of cost`} />
+            <Row label="Materials" value={$(totals.materials)} />
+            <Row label="Labor" value={$(totals.labor)} />
+            <Row className="no-print" label="Contingency" value={$(totals.contingency)} hint={`${pct(contingencyPct)} of direct`} />
+            <Row className="no-print" label="Markup" value={$(totals.markup)} hint={`${pct(markupPct)} of cost`} />
             <div className="border-t border-neutral-200 pt-2">
-              <Row label="Bid total (ex GST)" value={money(totals.bidTotal)} />
+              <Row label={`Bid total (ex ${market.taxName})`} value={$(totals.bidTotal)} />
             </div>
-            <Row label="GST" value={money(totals.gst)} hint={`${pct(gstPct)} of bid`} />
+            <Row label={market.taxName} value={$(totals.gst)} hint={`${pct(gstPct)} of bid`} />
             <div className="border-t border-neutral-200 pt-2">
-              <Row label="Total inc GST" value={money(totals.totalIncGst)} strong />
+              <Row label={`Total inc ${market.taxName}`} value={$(totals.totalIncGst)} strong />
             </div>
-            <Row label="Profit" value={money(totals.profit)} />
-            <Row label="Margin" value={pct(totals.marginPct)} hint="profit ÷ bid" />
+            <Row className="no-print" label="Profit" value={$(totals.profit)} />
+            <Row className="no-print" label="Margin" value={pct(totals.marginPct)} hint="profit ÷ bid" />
           </dl>
           <MarginGuard
             marginPct={totals.marginPct}
@@ -443,6 +538,12 @@ export function Estimator() {
 
       <footer className="border-t border-neutral-200/70 px-4 py-5 text-center text-xs text-neutral-400 sm:px-8">
         Bidding Wizards
+        <span className="no-print">
+          {" · "}
+          <a href="./bidbench.html" className="underline-offset-2 hover:underline">
+            Classic BidBench
+          </a>
+        </span>
       </footer>
     </div>
   );
@@ -455,10 +556,12 @@ function QtyRow({
   row,
   onChange,
   onRemove,
+  formatMoney,
 }: {
   row: QtyMaterialLine;
   onChange: (next: QtyMaterialLine) => void;
   onRemove: () => void;
+  formatMoney: (n: number) => string;
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(4.5rem,0.5fr))_minmax(5rem,0.6fr)_auto] items-center gap-1 rounded-xl border border-neutral-100 px-2 py-1 text-sm">
@@ -501,7 +604,7 @@ function QtyRow({
       </label>
       <div className="text-right">
         <div className="text-[10px] uppercase tracking-wide text-neutral-400">Line</div>
-        <div className="font-medium tabular-nums">{money(materialTotal(row))}</div>
+        <div className="font-medium tabular-nums">{formatMoney(materialTotal(row))}</div>
       </div>
       <button
         type="button"
@@ -515,32 +618,37 @@ function QtyRow({
   );
 }
 
-function SqFtRow({
-  metric,
+function AreaPricedRow({
   row,
   onChange,
   onRemove,
+  currency,
+  formatMoney,
 }: {
-  metric: boolean;
-  row: SqFtLine;
-  onChange: (next: SqFtLine) => void;
+  row: AreaPricedLine;
+  onChange: (next: AreaPricedLine) => void;
   onRemove: () => void;
+  currency: string;
+  formatMoney: (n: number) => string;
 }) {
-  const area = sqFtArea(row);
+  const unit = lineAreaUnit(row);
+  const labels = labelsForAreaUnit(unit, currency);
+  const area = lineArea(row);
+  const price = linePricePerArea(row);
   return (
-    <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(4.5rem,0.45fr))_minmax(5rem,0.5fr)_minmax(5rem,0.55fr)_auto] items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/40 px-2 py-1 text-sm">
+    <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(4.5rem,0.45fr))_minmax(5.5rem,0.55fr)_minmax(5.5rem,0.6fr)_auto] items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/40 px-2 py-1 text-sm">
       <label className="flex min-w-0 flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-amber-800/70">{metric ? "Area item (m²)" : "Sq ft item"}</span>
+        <span className="text-[10px] uppercase tracking-wide text-amber-800/70">{labels.item}</span>
         <input
           value={row.item}
           onChange={(e) => onChange({ ...row, item: e.target.value })}
           className={fieldClass}
-          placeholder="Room / flooring"
-          aria-label="Square-footage item"
+          placeholder={unit === "m" ? "Re-roof / deck" : "Room / flooring"}
+          aria-label={labels.item}
         />
       </label>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "Length (m)" : "Length (ft)"}</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{labels.length}</span>
         <input
           type="number"
           min={0}
@@ -551,7 +659,7 @@ function SqFtRow({
         />
       </label>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "Width (m)" : "Width (ft)"}</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{labels.width}</span>
         <input
           type="number"
           min={0}
@@ -562,29 +670,34 @@ function SqFtRow({
         />
       </label>
       <div className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">Area</span>
-        <span className="px-2 py-1.5 tabular-nums text-neutral-800">{area.toLocaleString(undefined, { maximumFractionDigits: 2 })} {metric ? "m²" : "sf"}</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{labels.area}</span>
+        <span className="px-2 py-1.5 tabular-nums text-neutral-800">
+          {area.toLocaleString()} {labels.areaSuffix}
+        </span>
       </div>
       <label className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{metric ? "$/m²" : "$/sf"}</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-400">{labels.price}</span>
         <input
           type="number"
           min={0}
           step="0.01"
-          value={row.pricePerSqFt}
-          onChange={(e) => onChange({ ...row, pricePerSqFt: parseNumber(e.target.value) })}
+          value={price}
+          onChange={(e) => {
+            const next = parseNumber(e.target.value);
+            onChange(isSqFtLine(row) ? { ...row, pricePerSqFt: next } : { ...row, pricePerArea: next });
+          }}
           className={fieldClass}
         />
       </label>
       <div className="text-right">
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400">Dollars</div>
-        <div className="font-medium tabular-nums">{money(materialTotal(row))}</div>
+        <div className="text-[10px] uppercase tracking-wide text-neutral-400">{labels.amount}</div>
+        <div className="font-medium tabular-nums">{formatMoney(materialTotal(row))}</div>
       </div>
       <button
         type="button"
         className="no-print px-1 text-neutral-400 hover:text-red-600"
         onClick={onRemove}
-        aria-label="Remove square-footage line"
+        aria-label="Remove area line"
       >
         ×
       </button>
@@ -597,14 +710,16 @@ function Row({
   value,
   hint,
   strong,
+  className,
 }: {
   label: string;
   value: string;
   hint?: string;
   strong?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <div className={`flex items-baseline justify-between gap-3 ${className ?? ""}`}>
       <dt className="text-neutral-500">
         {label}
         {hint ? <span className="ml-1 text-[10px] text-neutral-400">{hint}</span> : null}
