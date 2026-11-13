@@ -32,3 +32,15 @@ describe("bidText", () => {
     expect(t).not.toContain("Material:");
   });
 });
+
+describe("bidText metric", () => {
+  it("writes area lines in m² when metric is on", () => {
+    const t = bidText(
+      { name: "Reroof", address: "", date: "" },
+      { materials: [{ kind: "sqft", id: "r", item: "Roof", length: 12, width: 8, pricePerSqFt: 45 }], labor: [], contingencyPct: 0, markupPct: 0, gstPct: 15 },
+      true,
+    );
+    expect(t).toContain("Roof: 12 x 8 = 96 m² @ $45.00/m² = $4,320.00");
+    expect(t).not.toContain("sq ft");
+  });
+});

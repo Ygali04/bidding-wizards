@@ -98,3 +98,13 @@ describe("readJob sq-ft lines", () => {
     expect(toilet && !isSqFtLine(toilet) && toilet.quantity).toBe(1);
   });
 });
+
+describe("metric briefs", () => {
+  it("reads 12 x 8 m and 30 m2 as area lines", () => {
+    const r = readJob("Roof 12 x 8 m colorbond reroof, plus 30 m² of floor tile in the bathroom");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const areas = r.materials.filter(isSqFtLine).map((l) => l.length * l.width).sort((a, b) => a - b);
+    expect(areas).toEqual([30, 96]);
+  });
+});

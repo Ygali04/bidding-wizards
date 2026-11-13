@@ -118,6 +118,7 @@ export type ReadJobResult = ReadJobOk | ReadJobFail;
 
 function normalize(text: string): string {
   return text
+    .replace(/²/g, "2")
     .toLowerCase()
     .replace(/[’']/g, "'")
     .replace(/[^a-z0-9./%\- ]+/g, " ")
@@ -234,7 +235,7 @@ function isOutOfScope(text: string): boolean {
   return tradeHits === 0 || scopeHits > tradeHits;
 }
 
-const AREA_UNIT = String.raw`(?:sq\.?\s*ft|sqft|square\s*feet|square\s*foot|\bsf\b)`;
+const AREA_UNIT = String.raw`(?:sq\.?\s*ft|sqft|square\s*feet|square\s*foot|\bsf\b|m2\b|sq\.?\s*m\b|sqm\b|square\s*met(?:re|er)s?)`;
 
 const LOCATION_WORDS =
   /room|bedroom|bath|kitchen|garage|deck|patio|office|closet|hall|dining|living|floor|area|space|shed|shop|basement|attic|porch|foyer|laundry|mudroom|entry/;
@@ -294,7 +295,7 @@ export function parseSqFtPhrases(raw: string): ParsedSqFtPhrase[] {
   const results: ParsedSqFtPhrase[] = [];
 
   const dimRe =
-    /\b(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?/gi;
+    /\b(\d+(?:\.\d+)?)\s*(?:'|ft|feet|m\b|metres?|meters?)?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|m\b|metres?|meters?)?/gi;
   let m: RegExpExecArray | null;
   while ((m = dimRe.exec(text))) {
     const start = m.index;
@@ -550,7 +551,7 @@ export function readJob(raw: string): ReadJobResult {
     notes.push("No catalog materials matched — add lines by hand.");
   }
   if (sqftLines.length) {
-    notes.push("Square-footage lines are on the bid (L×W×$/sf) — edit length, width, or price.");
+    notes.push("Area lines are on the bid (length × width × price per unit area) — edit length, width, or price.");
   }
   if (labor.length === 0) {
     notes.push("No labor matched — add crew hours by hand.");

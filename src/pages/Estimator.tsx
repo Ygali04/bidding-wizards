@@ -72,7 +72,7 @@ export function Estimator() {
   }
 
   async function copyBid() {
-    const text = bidText(job, { materials, labor, markupPct, contingencyPct, gstPct });
+    const text = bidText(job, { materials, labor, markupPct, contingencyPct, gstPct }, metric);
     try {
       await navigator.clipboard.writeText(text);
       setStatus({ kind: "ok", text: "Bid copied as plain text." });
