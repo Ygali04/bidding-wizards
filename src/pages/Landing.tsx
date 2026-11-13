@@ -10,7 +10,7 @@ const COPY = {
   headlineLine2: " is now on",
   headlineScribble: "the money.",
   subtitleBefore: "Paste the job in your own words. Wizbid itemizes",
-  subtitleHighlight: "materials, labor, contingency and markup",
+  subtitleHighlight: "materials, labor, contingency, markup and GST",
   subtitleAfter: "so you see the margin you'll keep before it goes out the door.",
   ctaLabel: "Open the estimator",
   ghostLabel: "Try a sample bath",
@@ -31,7 +31,9 @@ const COPY = {
         { name: "Subway tile · 48 sq ft", kind: "Material", status: "$204" },
         { name: "Vanity + toilet + faucet", kind: "Material", status: "$750" },
         { name: "Tile setter + plumber", kind: "Labor", status: "$1,140" },
-        { name: "Contingency + markup", kind: "On cost", status: "Bid $3.1k" },
+        { name: "Contingency + markup", kind: "On cost", status: "$3.1k ex GST" },
+        { name: "GST", kind: "10% of bid", status: "$310" },
+        { name: "Total incl. GST", kind: "Payable", status: "$3.41k" },
       ],
     },
     quickPrompts: [
@@ -40,7 +42,8 @@ const COPY = {
       { label: "Privacy fence", text: "80 ft cedar privacy fence, helper for demo and haul away." },
     ],
     inputPlaceholder: "Brief the job…",
-    replyDefault: "Drafting a line-item bid from that brief — materials, labor, then contingency and markup.",
+    replyDefault:
+      "Drafting a line-item bid from that brief — materials, labor, contingency, markup, then GST as its own line and a GST-inclusive total.",
     replyKitchen:
       "Kitchen: subway tile + quartz, tile setter and carpenter. Markup on cost-to-complete, margin on the bid.",
     replyRoof: "Roof: shingles + underlayment, roofer hours. I'll bump contingency if the deck is unknown.",

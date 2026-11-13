@@ -33,6 +33,8 @@ export type EstimateInput = {
   contingencyPct: number;
   /** Markup as a percent of cost-to-complete (direct + contingency). */
   markupPct: number;
+  /** GST as a percent of the GST-exclusive bid. Defaults to 10. */
+  gstPct?: number;
 };
 
 export type EstimateBreakdown = {
@@ -42,7 +44,12 @@ export type EstimateBreakdown = {
   contingency: number;
   costToComplete: number;
   markup: number;
+  /** GST-exclusive bid (cost-to-complete + markup). */
   bidTotal: number;
+  /** GST dollars on the exclusive bid. */
+  gst: number;
+  /** Payable figure: exclusive bid + GST. */
+  gstInclusive: number;
   profit: number;
   marginPct: number;
 };
@@ -103,8 +110,10 @@ function clampPct(n: number): number {
  * contingency = direct × contingency%
  * cost       = direct + contingency
  * markup     = cost × markup%          ← dollars of profit
- * bid        = cost + markup
- * margin %   = markup / bid            ← profit as a share of the bid
+ * bid        = cost + markup           ← GST-exclusive
+ * gst        = bid × gst%              ← separate GST line
+ * inclusive  = bid + gst               ← GST-inclusive payable
+ * margin %   = markup / bid            ← profit as a share of the exclusive bid
  */
 export function breakdown(input: EstimateInput): EstimateBreakdown {
   const materials = roundCents(input.materials.reduce((sum, line) => sum + materialTotal(line), 0));
@@ -114,6 +123,9 @@ export function breakdown(input: EstimateInput): EstimateBreakdown {
   const costToComplete = roundCents(direct + contingency);
   const markup = roundCents(costToComplete * (clampPct(input.markupPct) / 100));
   const bidTotal = roundCents(costToComplete + markup);
+  const gstPct = input.gstPct === undefined ? 10 : clampPct(input.gstPct);
+  const gst = roundCents(bidTotal * (gstPct / 100));
+  const gstInclusive = roundCents(bidTotal + gst);
   const profit = markup;
   const marginPct = bidTotal > 0 ? roundCents((profit / bidTotal) * 100) : 0;
 
@@ -125,6 +137,8 @@ export function breakdown(input: EstimateInput): EstimateBreakdown {
     costToComplete,
     markup,
     bidTotal,
+    gst,
+    gstInclusive,
     profit,
     marginPct,
   };

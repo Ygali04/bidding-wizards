@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { DEFAULT_CONTINGENCY, DEFAULT_MARKUP } from "../lib/catalog";
+import { DEFAULT_CONTINGENCY, DEFAULT_GST, DEFAULT_MARKUP } from "../lib/catalog";
 import {
   breakdown,
   emptyLabor,
@@ -26,12 +26,13 @@ export function Estimator() {
   const [labor, setLabor] = useState<LaborLine[]>([emptyLabor()]);
   const [markupPct, setMarkupPct] = useState(DEFAULT_MARKUP);
   const [contingencyPct, setContingencyPct] = useState(DEFAULT_CONTINGENCY);
+  const [gstPct, setGstPct] = useState(DEFAULT_GST);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [reading, setReading] = useState(false);
 
   const totals = useMemo(
-    () => breakdown({ materials, labor, markupPct, contingencyPct }),
-    [materials, labor, markupPct, contingencyPct],
+    () => breakdown({ materials, labor, markupPct, contingencyPct, gstPct }),
+    [materials, labor, markupPct, contingencyPct, gstPct],
   );
 
   function applyRead(text: string) {
@@ -255,7 +256,7 @@ export function Estimator() {
             </div>
           </section>
 
-          <section className="no-print grid gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:grid-cols-2 sm:p-5">
+          <section className="no-print grid gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:grid-cols-3 sm:p-5">
             <label className="text-sm">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
                 Contingency % of direct
@@ -282,6 +283,19 @@ export function Estimator() {
                 className="w-full rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2 focus:border-neutral-900 focus:outline-none"
               />
             </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                GST % of exclusive bid
+              </span>
+              <input
+                type="number"
+                min={0}
+                step="0.1"
+                value={gstPct}
+                onChange={(e) => setGstPct(parseNumber(e.target.value))}
+                className="w-full rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2 focus:border-neutral-900 focus:outline-none"
+              />
+            </label>
           </section>
         </div>
 
@@ -294,10 +308,14 @@ export function Estimator() {
             <Row label="Contingency" value={money(totals.contingency)} hint={`${pct(contingencyPct)} of direct`} />
             <Row label="Markup" value={money(totals.markup)} hint={`${pct(markupPct)} of cost`} />
             <div className="border-t border-neutral-200 pt-2">
-              <Row label="Bid total" value={money(totals.bidTotal)} strong />
+              <Row label="Bid (ex GST)" value={money(totals.bidTotal)} />
+            </div>
+            <Row label="GST" value={money(totals.gst)} hint={`${pct(gstPct)} of bid`} />
+            <div className="border-t border-neutral-200 pt-2">
+              <Row label="Total incl. GST" value={money(totals.gstInclusive)} strong />
             </div>
             <Row label="Profit" value={money(totals.profit)} />
-            <Row label="Margin" value={pct(totals.marginPct)} hint="profit ÷ bid" />
+            <Row label="Margin" value={pct(totals.marginPct)} hint="profit ÷ bid ex GST" />
           </dl>
         </aside>
       </main>
