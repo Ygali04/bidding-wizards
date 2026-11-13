@@ -8,8 +8,8 @@ import { useState } from "react";
 const COPY = {
   headlineLine1: "Know your ",
   headlineMarker: "margin",
-  headlineLine2: " before the bid",
-  headlineScribble: "leaves your hands.",
+  headlineLine2: " before",
+  headlineScribble: "you send the bid.",
   subtitleBefore: "Paste the job, or drop a PDF blueprint. Bidding Wizards itemizes",
   subtitleHighlight: "materials, labor, contingency and markup",
   subtitleAfter: "so the profit you'll keep is on the page before you send it.",

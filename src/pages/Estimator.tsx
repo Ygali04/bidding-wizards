@@ -128,14 +128,14 @@ export function Estimator() {
 
   return (
     <div className="playful-root min-h-screen bg-[#FAFAFA] text-neutral-900">
-      <header className="no-print flex items-center justify-between border-b border-neutral-200/70 px-4 py-3 sm:px-8">
+      <header className="no-print flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 px-4 py-3 sm:px-8">
         <Link to="/" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FACC15] text-sm font-black text-neutral-950">
             W
           </span>
           <span className="text-sm font-bold tracking-tight">Bidding Wizards</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <a href="./bidbench.html" className="px-2 text-xs font-semibold text-neutral-500 hover:text-black">
             Classic BidBench
           </a>
@@ -184,7 +184,7 @@ export function Estimator() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
           <JobDetails job={job} onChange={setJob} />
           <section className="no-print rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:p-5">

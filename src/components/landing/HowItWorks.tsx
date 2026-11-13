@@ -26,7 +26,7 @@ const RULES = [
 export function HowItWorks() {
   return (
     <section id="how-it-works" className="w-full border-t border-neutral-200/70 bg-white px-6 py-16 sm:px-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <p className="text-xs font-bold uppercase tracking-widest text-neutral-400">How it works</p>
         <h2 className="mt-2 max-w-2xl text-3xl font-black tracking-tight text-neutral-900 sm:text-4xl">
           Every part of the bid, out in the open.
