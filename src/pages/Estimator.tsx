@@ -101,6 +101,9 @@ export function Estimator() {
           <span className="text-sm font-bold tracking-tight">Wizbid</span>
         </Link>
         <div className="flex items-center gap-2">
+          <a href="./bidbench.html" className="px-2 text-xs font-semibold text-neutral-500 hover:text-black">
+            Classic BidBench
+          </a>
           <button
             type="button"
             onClick={loadSample}
