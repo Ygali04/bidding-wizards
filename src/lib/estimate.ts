@@ -33,6 +33,8 @@ export type EstimateInput = {
   contingencyPct: number;
   /** Markup as a percent of cost-to-complete (direct + contingency). */
   markupPct: number;
+  /** GST as a percent of the ex-GST bid (AU 10, NZ 15). Pass-through tax: not cost, not profit. */
+  gstPct?: number;
 };
 
 export type EstimateBreakdown = {
@@ -45,6 +47,8 @@ export type EstimateBreakdown = {
   bidTotal: number;
   profit: number;
   marginPct: number;
+  gst: number;
+  totalIncGst: number;
 };
 
 function lineMoney(qty: number, unit: number): number {
@@ -116,6 +120,8 @@ export function breakdown(input: EstimateInput): EstimateBreakdown {
   const bidTotal = roundCents(costToComplete + markup);
   const profit = markup;
   const marginPct = bidTotal > 0 ? roundCents((profit / bidTotal) * 100) : 0;
+  const gst = roundCents(bidTotal * (clampPct(input.gstPct ?? 0) / 100));
+  const totalIncGst = roundCents(bidTotal + gst);
 
   return {
     materials,
@@ -127,6 +133,8 @@ export function breakdown(input: EstimateInput): EstimateBreakdown {
     bidTotal,
     profit,
     marginPct,
+    gst,
+    totalIncGst,
   };
 }
 

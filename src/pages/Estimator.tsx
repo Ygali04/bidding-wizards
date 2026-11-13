@@ -33,13 +33,14 @@ export function Estimator() {
   const [markupPct, setMarkupPct] = useState(DEFAULT_MARKUP);
   const [contingencyPct, setContingencyPct] = useState(DEFAULT_CONTINGENCY);
   const [targetMargin, setTargetMargin] = useState(15);
+  const [gstPct, setGstPct] = useState(10);
   const [overrunPct, setOverrunPct] = useState(10);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [reading, setReading] = useState(false);
 
   const totals = useMemo(
-    () => breakdown({ materials, labor, markupPct, contingencyPct }),
-    [materials, labor, markupPct, contingencyPct],
+    () => breakdown({ materials, labor, markupPct, contingencyPct, gstPct }),
+    [materials, labor, markupPct, contingencyPct, gstPct],
   );
 
   async function applyRead(text: string) {
@@ -299,6 +300,19 @@ export function Estimator() {
                 className="w-full rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2 focus:border-neutral-900 focus:outline-none"
               />
             </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                GST % (AU 10, NZ 15, 0 if exempt)
+              </span>
+              <input
+                type="number"
+                min={0}
+                step="0.5"
+                value={gstPct}
+                onChange={(e) => setGstPct(parseNumber(e.target.value))}
+                className="w-full rounded-xl border border-neutral-200 bg-[#FAFAFA] px-3 py-2 focus:border-neutral-900 focus:outline-none"
+              />
+            </label>
             <label className="text-sm">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
                 Markup % of cost-to-complete
@@ -324,7 +338,11 @@ export function Estimator() {
             <Row label="Contingency" value={money(totals.contingency)} hint={`${pct(contingencyPct)} of direct`} />
             <Row label="Markup" value={money(totals.markup)} hint={`${pct(markupPct)} of cost`} />
             <div className="border-t border-neutral-200 pt-2">
-              <Row label="Bid total" value={money(totals.bidTotal)} strong />
+              <Row label="Bid total (ex GST)" value={money(totals.bidTotal)} />
+            </div>
+            <Row label="GST" value={money(totals.gst)} hint={`${pct(gstPct)} of bid`} />
+            <div className="border-t border-neutral-200 pt-2">
+              <Row label="Total inc GST" value={money(totals.totalIncGst)} strong />
             </div>
             <Row label="Profit" value={money(totals.profit)} />
             <Row label="Margin" value={pct(totals.marginPct)} hint="profit ÷ bid" />
