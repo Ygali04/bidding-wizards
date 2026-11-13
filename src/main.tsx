@@ -11,3 +11,8 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+// Offline mode for job sites: the service worker caches the app so it opens with no signal.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+}
