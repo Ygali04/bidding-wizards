@@ -4,8 +4,8 @@
 
 Paste a job in plain words — or drop a PDF blueprint — and get an itemized contractor bid: materials, labor, contingency, markup, GST, and the profit you'll keep. No sign-in, no API key, no card.
 
-- **Live product:** https://espetro.github.io/bidding-wizards/ — estimator at `#/bid`
-- **Pitch deck:** https://espetro.github.io/bidding-wizards/pitch.html
+- **Live product:** https://bidding-wizards.vercel.app/ — NZ sample at `/#/bid?loc=nz&sample=1` (also `/bid?loc=nz&sample=1`)
+- **Pitch deck:** https://bidding-wizards.vercel.app/pitch.html
 - **Booked ARR:** $133.8K across 4 paying customers, incl. a $90K/yr interiors firm
 
 ## What buyers get
