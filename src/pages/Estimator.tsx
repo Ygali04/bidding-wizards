@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BlueprintUpload } from "../components/BlueprintUpload";
+import { JobDetails } from "../components/JobDetails";
+import { bidText } from "../lib/bidText";
+import { clearDraft, emptyJob, loadDraft, saveDraft, type JobInfo } from "../lib/draft";
 import { DEFAULT_CONTINGENCY, DEFAULT_MARKUP } from "../lib/catalog";
 import type { BlueprintTakeoff } from "../lib/blueprintMock";
 import {
@@ -28,14 +31,18 @@ import { download, toProcoreBudgetCsv, toQuickBooksIif } from "../lib/exports";
 type Status = { kind: "idle" } | { kind: "ok"; text: string } | { kind: "err"; text: string };
 
 export function Estimator() {
-  const [notes, setNotes] = useState("");
-  const [materials, setMaterials] = useState<MaterialLine[]>([emptyMaterial()]);
-  const [labor, setLabor] = useState<LaborLine[]>([emptyLabor()]);
-  const [markupPct, setMarkupPct] = useState(DEFAULT_MARKUP);
-  const [contingencyPct, setContingencyPct] = useState(DEFAULT_CONTINGENCY);
-  const [targetMargin, setTargetMargin] = useState(15);
-  const [gstPct, setGstPct] = useState(10);
-  const [overrunPct, setOverrunPct] = useState(10);
+  const [saved] = useState(loadDraft);
+  const [job, setJob] = useState<JobInfo>(saved?.job ?? emptyJob());
+  const [notes, setNotes] = useState(saved?.notes ?? "");
+  const [materials, setMaterials] = useState<MaterialLine[]>(
+    saved?.materials.length ? saved.materials : [emptyMaterial()],
+  );
+  const [labor, setLabor] = useState<LaborLine[]>(saved?.labor.length ? saved.labor : [emptyLabor()]);
+  const [markupPct, setMarkupPct] = useState(saved?.markupPct ?? DEFAULT_MARKUP);
+  const [contingencyPct, setContingencyPct] = useState(saved?.contingencyPct ?? DEFAULT_CONTINGENCY);
+  const [targetMargin, setTargetMargin] = useState(saved?.targetMargin ?? 15);
+  const [gstPct, setGstPct] = useState(saved?.gstPct ?? 10);
+  const [overrunPct, setOverrunPct] = useState(saved?.overrunPct ?? 10);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [reading, setReading] = useState(false);
 
@@ -43,6 +50,34 @@ export function Estimator() {
     () => breakdown({ materials, labor, markupPct, contingencyPct, gstPct }),
     [materials, labor, markupPct, contingencyPct, gstPct],
   );
+
+  // Persist the working bid so a refresh or accidental navigation does not lose it.
+  useEffect(() => {
+    saveDraft({ job, notes, materials, labor, markupPct, contingencyPct, gstPct, targetMargin, overrunPct });
+  }, [job, notes, materials, labor, markupPct, contingencyPct, gstPct, targetMargin, overrunPct]);
+
+  function newBid() {
+    if (!window.confirm("Clear this bid and start a new one?")) return;
+    clearDraft();
+    setJob(emptyJob());
+    setNotes("");
+    setMaterials([emptyMaterial()]);
+    setLabor([emptyLabor()]);
+    setMarkupPct(DEFAULT_MARKUP);
+    setContingencyPct(DEFAULT_CONTINGENCY);
+    setGstPct(10);
+    setStatus({ kind: "idle" });
+  }
+
+  async function copyBid() {
+    const text = bidText(job, { materials, labor, markupPct, contingencyPct, gstPct });
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus({ kind: "ok", text: "Bid copied as plain text." });
+    } catch {
+      window.prompt("Copy your bid:", text);
+    }
+  }
 
   async function applyRead(text: string) {
     setReading(true);
@@ -106,6 +141,20 @@ export function Estimator() {
           </a>
           <button
             type="button"
+            onClick={newBid}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            New bid
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyBid()}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+          >
+            Copy bid
+          </button>
+          <button
+            type="button"
             onClick={loadSample}
             className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
           >
@@ -137,6 +186,7 @@ export function Estimator() {
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
+          <JobDetails job={job} onChange={setJob} />
           <section className="no-print rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
