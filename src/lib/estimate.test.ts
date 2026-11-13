@@ -109,6 +109,15 @@ describe("breakdown", () => {
 describe("sqFtArea / sqFtAmount", () => {
   it("computes area as L×W and dollars as area × $/sf in plain code", () => {
     expect(sqFtArea({ length: 12, width: 14 })).toBe(168);
+    expect(sqFtAmount({ kind: "sqft", id: "s", item: "room", length: 12, width: 14, pricePerSqFt: 10 })).toBe(1680);
+    const bid = breakdown({
+      materials: [{ kind: "sqft", id: "s", item: "room", length: 12, width: 14, pricePerSqFt: 10 }],
+      labor: [],
+      contingencyPct: 0,
+      markupPct: 0,
+    });
+    expect(bid.materials).toBe(1680);
+    expect(bid.bidTotal).toBe(1680);
     expect(sqFtAmount({ kind: "sqft", id: "s", item: "room", length: 12, width: 14, pricePerSqFt: 4.25 })).toBe(714);
     expect(sqFtArea({ length: 800, width: 1 })).toBe(800);
     expect(sqFtAmount({ kind: "sqft", id: "s", item: "floor", length: 800, width: 1, pricePerSqFt: 7.8 })).toBe(6240);

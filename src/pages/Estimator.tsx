@@ -303,7 +303,7 @@ export function Estimator() {
       </main>
 
       <footer className="border-t border-neutral-200/70 px-4 py-5 text-center text-xs text-neutral-400 sm:px-8">
-        Bidding Wizards · Wizbid · totals computed in the browser
+        Bidding Wizards
       </footer>
     </div>
   );

@@ -93,7 +93,7 @@ export function Landing() {
 
       <MinimalFooter
         ref={fit.footerRef}
-        copyright="© 2026 Bidding Wizards · Wizbid"
+        copyright="Bidding Wizards"
         links={[
           { label: "Estimator", href: "#/bid" },
           { label: "GitHub", href: "https://github.com/espetro/bidding-wizards" },
