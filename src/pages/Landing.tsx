@@ -9,7 +9,7 @@ const COPY = {
   headlineMarker: "you send",
   headlineLine2: " is now on",
   headlineScribble: "the money.",
-  subtitleBefore: "Paste the job, or drop a PDF blueprint. Wizbid itemizes",
+  subtitleBefore: "Paste the job, or drop a PDF blueprint. Bidding Wizards itemizes",
   subtitleHighlight: "materials, labor, contingency and markup",
   subtitleAfter: "so you see the margin you'll keep before it goes out the door. TypeSafe Jev classifies PDFs and job forms when the API key is set; Pages still uses the canned take-off.",
   ctaLabel: "Open the estimator",
@@ -23,7 +23,7 @@ const COPY = {
     userMeta: "9:40 AM",
     agentMessage:
       "First-cut bid: tile, vanity, toilet, paint, tile setter + plumber + painter. Contingency bumped for occupied home and hidden water.",
-    agentMeta: "9:41 AM · Wizbid",
+    agentMeta: "9:41 AM · Bidding Wizards",
     board: {
       title: "Guest bath bid",
       filled: "Itemized",
@@ -47,7 +47,7 @@ const COPY = {
       "Kitchen: subway tile + quartz, tile setter and carpenter. Markup on cost-to-complete, margin on the bid.",
     replyRoof: "Roof: shingles + underlayment, roofer hours. I'll bump contingency if the deck is unknown.",
     replyFence: "Fence: cedar boards + carpenter + laborer. Add the linear run and I'll extend the takeoff.",
-    replyMeta: "Just now · Wizbid",
+    replyMeta: "Just now · Bidding Wizards",
   },
 };
 
@@ -62,7 +62,7 @@ export function Landing() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FACC15] text-sm font-black text-neutral-950">
             W
           </span>
-          <span className="text-sm font-bold tracking-tight text-neutral-900">Wizbid</span>
+          <span className="text-sm font-bold tracking-tight text-neutral-900">Bidding Wizards</span>
         </a>
         <a
           href="#/bid"

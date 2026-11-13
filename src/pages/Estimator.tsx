@@ -98,7 +98,7 @@ export function Estimator() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FACC15] text-sm font-black text-neutral-950">
             W
           </span>
-          <span className="text-sm font-bold tracking-tight">Wizbid</span>
+          <span className="text-sm font-bold tracking-tight">Bidding Wizards</span>
         </Link>
         <div className="flex items-center gap-2">
           <a href="./bidbench.html" className="px-2 text-xs font-semibold text-neutral-500 hover:text-black">
