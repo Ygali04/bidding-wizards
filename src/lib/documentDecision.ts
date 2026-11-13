@@ -66,7 +66,7 @@ export const DOCUMENT_QUESTIONS = {
   },
   isTradeDocument: {
     type: "boolean" as const,
-    instructions: "Is this a construction trade document or form Wizbid can bid from?",
+    instructions: "Is this a construction trade document or form Bidding Wizards can bid from?",
     criteria: {
       true: "Electrical or architectural drawings, or a job/bid form with trade scope",
       false: "Unrelated files, empty notes, or non-construction paperwork",

@@ -445,7 +445,7 @@ export function readJob(raw: string): ReadJobResult {
       ok: false,
       reason: "out_of_scope",
       message:
-        "This reads like it isn't a trades job (software, legal, catering, medical, tax…). Wizbid only estimates construction work.",
+        "This reads like it isn't a trades job (software, legal, catering, medical, tax…). Bidding Wizards only estimates construction work.",
     };
   }
 

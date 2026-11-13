@@ -1,6 +1,6 @@
 {
-  "name": "Wizbid estimator",
-  "short_name": "Wizbid",
+  "name": "Bidding Wizards estimator",
+  "short_name": "Bidding Wizards",
   "description": "Itemized bids with margin, GST and job costing. Works offline on site.",
   "start_url": "./#/bid",
   "scope": "./",

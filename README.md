@@ -1,4 +1,4 @@
-# Wizbid
+# Bidding Wizards
 
 Contractor estimate app from **Bidding Wizards**. Paste a job in your own words, get an itemized bid: materials (qty × unit cost), square-footage lines (L × W × $/sf), labor (hours × rate), contingency %, markup %, GST % (default 10), bid total (ex GST), GST line, GST-inclusive total, profit, and margin.
 

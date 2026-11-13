@@ -41,7 +41,7 @@ export function toQuickBooksIif(input: EstimateInput, customer: string, date = n
     "!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO",
     "!SPL\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tQNTY\tPRICE\tINVITEM\tMEMO",
     "!ENDTRNS",
-    `TRNS\tESTIMATE\t${d}\tEstimates\t${cust}\t${n2(b.totalIncGst)}\tWizbid estimate`,
+    `TRNS\tESTIMATE\t${d}\tEstimates\t${cust}\t${n2(b.totalIncGst)}\tBidding Wizards estimate`,
   ];
   // Bid is cost × (1 + markup): spread markup and contingency into each line's price so line totals sum to the bid.
   const factor = b.direct > 0 ? b.bidTotal / b.direct : 1;
