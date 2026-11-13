@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { BlueprintUpload } from "../components/BlueprintUpload";
 import { DEFAULT_CONTINGENCY, DEFAULT_MARKUP } from "../lib/catalog";
+import type { BlueprintTakeoff } from "../lib/blueprintMock";
 import {
   breakdown,
   emptyLabor,
@@ -15,7 +17,9 @@ import {
   type QtyMaterialLine,
   type SqFtLine,
 } from "../lib/estimate";
+import { applyFormHints } from "../lib/documentDecision";
 import { money, parseNumber, pct } from "../lib/money";
+import { processDocumentsClient } from "../lib/processDocumentClient";
 import { SAMPLE_JOB, readJob } from "../lib/readJob";
 
 type Status = { kind: "idle" } | { kind: "ok"; text: string } | { kind: "err"; text: string };
@@ -34,31 +38,51 @@ export function Estimator() {
     [materials, labor, markupPct, contingencyPct],
   );
 
-  function applyRead(text: string) {
+  async function applyRead(text: string) {
     setReading(true);
-    // Keep the button snappy: n-gram reader is sync; yield so the spinner paints.
-    window.setTimeout(() => {
-      const result = readJob(text);
+    const result = readJob(text);
+    if (!result.ok) {
       setReading(false);
-      if (!result.ok) {
-        setStatus({ kind: "err", text: result.message });
-        return;
-      }
-      setMaterials(result.materials.length ? result.materials : [emptyMaterial()]);
-      setLabor(result.labor.length ? result.labor : [emptyLabor()]);
-      setMarkupPct(result.markupPct);
-      setContingencyPct(result.contingencyPct);
-      const extra = result.notes.length ? ` ${result.notes.join(" ")}` : "";
-      setStatus({
-        kind: "ok",
-        text: `Matched ${result.matched.join(", ") || "nothing yet"}.${extra} Totals stay in the sheet — edit any line.`,
-      });
-    }, 40);
+      setStatus({ kind: "err", text: result.message });
+      return;
+    }
+    const classified = await processDocumentsClient({ kind: "form", notes: text });
+    const contingencyPct =
+      classified.ok && !classified.mock
+        ? applyFormHints(result.contingencyPct, classified.formHints)
+        : result.contingencyPct;
+    setMaterials(result.materials.length ? result.materials : [emptyMaterial()]);
+    setLabor(result.labor.length ? result.labor : [emptyLabor()]);
+    setMarkupPct(result.markupPct);
+    setContingencyPct(contingencyPct);
+    setReading(false);
+    const extra = result.notes.length ? ` ${result.notes.join(" ")}` : "";
+    const via = classified.ok && !classified.mock ? " Jev classified the form." : "";
+    setStatus({
+      kind: "ok",
+      text: `Matched ${result.matched.join(", ") || "nothing yet"}.${extra}${via} Totals stay in the sheet — edit any line.`,
+    });
   }
 
   function loadSample() {
     setNotes(SAMPLE_JOB);
-    applyRead(SAMPLE_JOB);
+    void applyRead(SAMPLE_JOB);
+  }
+
+  function applyTakeoff(takeoff: BlueprintTakeoff) {
+    setReading(true);
+    window.setTimeout(() => {
+      setNotes(takeoff.brief);
+      setMaterials(takeoff.materials.length ? takeoff.materials : [emptyMaterial()]);
+      setLabor(takeoff.labor.length ? takeoff.labor : [emptyLabor()]);
+      setMarkupPct(takeoff.markupPct);
+      setContingencyPct(takeoff.contingencyPct);
+      setReading(false);
+      setStatus({
+        kind: "ok",
+        text: `${takeoff.title}: ${takeoff.matched.join(", ")}. ${takeoff.mock ? "Heuristic counts" : "Jev-routed counts"} — edit any line before you send the bid.`,
+      });
+    }, 280);
   }
 
   return (
@@ -101,7 +125,7 @@ export function Estimator() {
               <button
                 type="button"
                 disabled={reading}
-                onClick={() => applyRead(notes)}
+                onClick={() => void applyRead(notes)}
                 className="rounded-xl bg-[#FACC15] px-4 py-2.5 text-sm font-bold text-neutral-950 shadow-sm hover:bg-[#EAB308] disabled:opacity-60"
               >
                 {reading ? "Reading…" : "Read this job"}
@@ -123,6 +147,8 @@ export function Estimator() {
               </p>
             )}
           </section>
+
+          <BlueprintUpload busy={reading} onTakeoff={applyTakeoff} />
 
           <section className="print-break rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
