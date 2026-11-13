@@ -1,6 +1,6 @@
 # Wizbid
 
-Contractor estimate app from **Bidding Wizards**. Paste a job in your own words, get an itemized bid: materials (qty × unit cost), square-footage lines (L × W × $/sf), labor (hours × rate), contingency %, markup %, bid total, profit, and margin.
+Contractor estimate app from **Bidding Wizards**. Paste a job in your own words, get an itemized bid: materials (qty × unit cost), square-footage lines (L × W × $/sf), labor (hours × rate), contingency %, markup %, GST % (default 10), bid total (ex GST), GST line, GST-inclusive total, profit, and margin.
 
 Line totals are **plain arithmetic in the browser**. The “Read this job” button is an on-device n-gram / catalog matcher (no API key). Non-trade briefs are qualified out.
 

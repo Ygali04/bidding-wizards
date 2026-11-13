@@ -31,7 +31,9 @@ const COPY = {
         { name: "Subway tile · 48 sq ft", kind: "Material", status: "$204" },
         { name: "Vanity + toilet + faucet", kind: "Material", status: "$750" },
         { name: "Tile setter + plumber", kind: "Labor", status: "$1,140" },
-        { name: "Contingency + markup", kind: "On cost", status: "Bid $3.1k" },
+        { name: "Contingency + markup", kind: "On cost", status: "Bid $3.1k ex GST" },
+        { name: "GST 10%", kind: "On bid", status: "$310" },
+        { name: "Total inc GST", kind: "Client pays", status: "$3.4k" },
       ],
     },
     quickPrompts: [
