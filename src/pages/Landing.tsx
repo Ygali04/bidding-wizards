@@ -9,13 +9,13 @@ const COPY = {
   headlineMarker: "you send",
   headlineLine2: " is now on",
   headlineScribble: "the money.",
-  subtitleBefore: "Paste the job in your own words. Wizbid itemizes",
+  subtitleBefore: "Paste the job, or drop a PDF blueprint. Wizbid itemizes",
   subtitleHighlight: "materials, labor, contingency and markup",
-  subtitleAfter: "so you see the margin you'll keep before it goes out the door.",
+  subtitleAfter: "so you see the margin you'll keep before it goes out the door. TypeSafe Jev classifies PDFs and job forms when the API key is set; Pages still uses the canned take-off.",
   ctaLabel: "Open the estimator",
-  ghostLabel: "Try a sample bath",
+  ghostLabel: "Try a blueprint take-off",
   rating: "Built for trades",
-  ratingNote: "Qty × cost and hours × rate live in code — never a model.",
+  ratingNote: "Qty × cost and hours × rate live in code. Jev only classifies the document.",
   statusTime: "9:41",
   phone: {
     userMessage:
@@ -96,6 +96,7 @@ export function Landing() {
         copyright="Bidding Wizards"
         links={[
           { label: "Estimator", href: "#/bid" },
+          { label: "Blueprint mock", href: "#/bid" },
           { label: "GitHub", href: "https://github.com/espetro/bidding-wizards" },
         ]}
       />
